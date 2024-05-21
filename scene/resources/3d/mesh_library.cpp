@@ -69,6 +69,8 @@ bool MeshLibrary::_set(const StringName &p_name, const Variant &p_value) {
 #endif // DISABLE_DEPRECATED
 		} else if (what == "navigation_layers") {
 			set_item_navigation_layers(idx, p_value);
+		} else if (what == "custom_data") {
+			set_custom_data_by_layer_id(idx, p_value.get("layer_id"), p_value.get("value"));
 		} else {
 			return false;
 		}
@@ -107,6 +109,8 @@ bool MeshLibrary::_get(const StringName &p_name, Variant &r_ret) const {
 		r_ret = get_item_navigation_layers(idx);
 	} else if (what == "preview") {
 		r_ret = get_item_preview(idx);
+	} else if (what == "custom_data") {
+		r_ret = get_custom_data_by_layer_id(idx, p_name.get_slicec('/', 3).to_int());
 	} else {
 		return false;
 	}
@@ -125,6 +129,7 @@ void MeshLibrary::_get_property_list(List<PropertyInfo> *p_list) const {
 		p_list->push_back(PropertyInfo(Variant::TRANSFORM3D, prop_name + PNAME("navigation_mesh_transform"), PROPERTY_HINT_NONE, "suffix:m"));
 		p_list->push_back(PropertyInfo(Variant::INT, prop_name + PNAME("navigation_layers"), PROPERTY_HINT_LAYERS_3D_NAVIGATION));
 		p_list->push_back(PropertyInfo(Variant::OBJECT, prop_name + PNAME("preview"), PROPERTY_HINT_RESOURCE_TYPE, "Texture2D", PROPERTY_USAGE_DEFAULT));
+		p_list->push_back(PropertyInfo(Variant::NIL, prop_name + PNAME("custom_data"), PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE));
 	}
 }
 
@@ -270,6 +275,117 @@ int MeshLibrary::get_last_unused_item_id() const {
 	}
 }
 
+// Custom data.
+int MeshLibrary::get_custom_data_layers_count() const {
+	return custom_data_layers.size();
+}
+
+void MeshLibrary::add_custom_data_layer(int p_index) {
+	if (p_index < 0) {
+		p_index = custom_data_layers.size();
+	}
+	ERR_FAIL_INDEX(p_index, custom_data_layers.size() + 1);
+	custom_data_layers.insert(p_index, CustomDataLayer());
+
+	/*
+	for (KeyValue<int, Ref<TileSetSource>> source : sources) {
+		source.value->add_custom_data_layer(p_index);
+	}
+	*/
+
+	notify_property_list_changed();
+	emit_changed();
+}
+
+void MeshLibrary::move_custom_data_layer(int p_from_index, int p_to_pos) {
+	ERR_FAIL_INDEX(p_from_index, custom_data_layers.size());
+	ERR_FAIL_INDEX(p_to_pos, custom_data_layers.size() + 1);
+	custom_data_layers.insert(p_to_pos, custom_data_layers[p_from_index]);
+	custom_data_layers.remove_at(p_to_pos < p_from_index ? p_from_index + 1 : p_from_index);
+	/*
+	for (KeyValue<int, Ref<TileSetSource>> source : sources) {
+		source.value->move_custom_data_layer(p_from_index, p_to_pos);
+	}
+	*/
+	notify_property_list_changed();
+	emit_changed();
+}
+
+void MeshLibrary::remove_custom_data_layer(int p_index) {
+	ERR_FAIL_INDEX(p_index, custom_data_layers.size());
+	custom_data_layers.remove_at(p_index);
+
+	String to_erase;
+	for (KeyValue<String, int> &E : custom_data_layers_by_name) {
+		if (E.value == p_index) {
+			to_erase = E.key;
+		} else if (E.value > p_index) {
+			E.value--;
+		}
+	}
+	custom_data_layers_by_name.erase(to_erase);
+	/*
+	for (KeyValue<int, Ref<TileSetSource>> source : sources) {
+		source.value->remove_custom_data_layer(p_index);
+	}
+	*/
+	notify_property_list_changed();
+	emit_changed();
+}
+
+int MeshLibrary::get_custom_data_layer_by_name(String p_value) const {
+	if (custom_data_layers_by_name.has(p_value)) {
+		return custom_data_layers_by_name[p_value];
+	} else {
+		return -1;
+	}
+}
+
+void MeshLibrary::set_custom_data_layer_name(int p_layer_id, String p_value) {
+	ERR_FAIL_INDEX(p_layer_id, custom_data_layers.size());
+
+	// Exit if another property has the same name.
+	if (!p_value.is_empty()) {
+		for (int other_layer_id = 0; other_layer_id < get_custom_data_layers_count(); other_layer_id++) {
+			if (other_layer_id != p_layer_id && get_custom_data_layer_name(other_layer_id) == p_value) {
+				ERR_FAIL_MSG(vformat("There is already a custom property named %s", p_value));
+			}
+		}
+	}
+
+	if (p_value.is_empty() && custom_data_layers_by_name.has(p_value)) {
+		custom_data_layers_by_name.erase(p_value);
+	} else {
+		custom_data_layers_by_name[p_value] = p_layer_id;
+	}
+
+	custom_data_layers.write[p_layer_id].name = p_value;
+	emit_changed();
+}
+
+String MeshLibrary::get_custom_data_layer_name(int p_layer_id) const {
+	ERR_FAIL_INDEX_V(p_layer_id, custom_data_layers.size(), "");
+	return custom_data_layers[p_layer_id].name;
+}
+
+void MeshLibrary::set_custom_data_layer_type(int p_layer_id, Variant::Type p_value) {
+	ERR_FAIL_INDEX(p_layer_id, custom_data_layers.size());
+	custom_data_layers.write[p_layer_id].type = p_value;
+
+	/*
+	for (KeyValue<int, Ref<TileSetSource>> &E_source : sources) {
+		E_source.value->notify_tile_data_properties_should_change();
+	}
+	*/
+
+	emit_changed();
+}
+
+Variant::Type MeshLibrary::get_custom_data_layer_type(int p_layer_id) const {
+	ERR_FAIL_INDEX_V(p_layer_id, custom_data_layers.size(), Variant::NIL);
+	return custom_data_layers[p_layer_id].type;
+}
+
 void MeshLibrary::_set_item_shapes(int p_item, const Array &p_shapes) {
 	Array arr_shapes = p_shapes;
 	int size = p_shapes.size();
@@ -320,6 +436,37 @@ Array MeshLibrary::_get_item_shapes(int p_item) const {
 	return ret;
 }
 
+// SETTER/GETTER ITEM SPECIFIC
+
+// Custom data
+void MeshLibrary::set_custom_data(int p_item, String p_layer_name, Variant p_value) {
+	//ERR_FAIL_NULL(tile_set);
+	ERR_FAIL_COND_MSG(!item_map.has(p_item), "Requested for nonexistent MeshLibrary item '" + itos(p_item) + "'.");
+	int p_layer_id = get_custom_data_layer_by_name(p_layer_name);
+	ERR_FAIL_COND_MSG(p_layer_id < 0, vformat("MeshLibrary has no layer with name: %s", p_layer_name));
+	set_custom_data_by_layer_id(p_item, p_layer_id, p_value);
+}
+
+Variant MeshLibrary::get_custom_data(int p_item, String p_layer_name) const {
+	//ERR_FAIL_NULL_V(tile_set, Variant());
+	ERR_FAIL_COND_V_MSG(!item_map.has(p_item), Variant(), "Requested for nonexistent MeshLibrary item '" + itos(p_item) + "'.");
+	int p_layer_id = get_custom_data_layer_by_name(p_layer_name);
+	ERR_FAIL_COND_V_MSG(p_layer_id < 0, Variant(), vformat("MeshLibrary has no layer with name: %s", p_layer_name));
+	return get_custom_data_by_layer_id(p_item, p_layer_id);
+}
+
+void MeshLibrary::set_custom_data_by_layer_id(int p_item, int p_layer_id, Variant p_value) {
+	ERR_FAIL_INDEX(p_layer_id, item_map[p_item].custom_data.size());
+	item_map[p_item].custom_data.write[p_layer_id] = p_value;
+	// TODO chnage later this
+	emit_changed();
+}
+
+Variant MeshLibrary::get_custom_data_by_layer_id(int p_item, int p_layer_id) const {
+	ERR_FAIL_INDEX_V(p_layer_id, item_map[p_item].custom_data.size(), Variant());
+	return item_map[p_item].custom_data[p_layer_id];
+}
+
 void MeshLibrary::reset_state() {
 	clear();
 }
@@ -347,6 +494,22 @@ void MeshLibrary::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("clear"), &MeshLibrary::clear);
 	ClassDB::bind_method(D_METHOD("get_item_list"), &MeshLibrary::get_item_list);
 	ClassDB::bind_method(D_METHOD("get_last_unused_item_id"), &MeshLibrary::get_last_unused_item_id);
+
+	// New binds
+	ClassDB::bind_method(D_METHOD("get_custom_data_layers_count"), &MeshLibrary::get_custom_data_layers_count);
+	ClassDB::bind_method(D_METHOD("add_custom_data_layer", "index"), &MeshLibrary::add_custom_data_layer, DEFVAL(-1));
+	ClassDB::bind_method(D_METHOD("move_custom_data_layer", "from_index", "to_pos"), &MeshLibrary::move_custom_data_layer);
+	ClassDB::bind_method(D_METHOD("remove_custom_data_layer", "index"), &MeshLibrary::remove_custom_data_layer);
+	ClassDB::bind_method(D_METHOD("get_custom_data_layer_by_name", "value"), &MeshLibrary::get_custom_data_layer_by_name);
+	ClassDB::bind_method(D_METHOD("set_custom_data_layer_name", "layer_id", "value"), &MeshLibrary::set_custom_data_layer_name);
+	ClassDB::bind_method(D_METHOD("get_custom_data_layer_name", "layer_id"), &MeshLibrary::get_custom_data_layer_name);
+	ClassDB::bind_method(D_METHOD("set_custom_data_layer_type", "layer_id", "value"), &MeshLibrary::set_custom_data_layer_type);
+	ClassDB::bind_method(D_METHOD("get_custom_data_layer_type", "layer_id"), &MeshLibrary::get_custom_data_layer_type);
+
+	ClassDB::bind_method(D_METHOD("set_custom_data", "item", "layer_name", "value"), &MeshLibrary::set_custom_data);
+	ClassDB::bind_method(D_METHOD("get_custom_data", "item", "layer_name"), &MeshLibrary::get_custom_data);
+	ClassDB::bind_method(D_METHOD("set_custom_data_by_layer_id", "item", "layer_id", "value"), &MeshLibrary::set_custom_data_by_layer_id);
+	ClassDB::bind_method(D_METHOD("get_custom_data_by_layer_id", "item", "layer_id"), &MeshLibrary::get_custom_data_by_layer_id);
 }
 
 MeshLibrary::MeshLibrary() {
