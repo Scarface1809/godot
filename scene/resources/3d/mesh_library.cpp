@@ -110,7 +110,7 @@ bool MeshLibrary::_get(const StringName &p_name, Variant &r_ret) const {
 	} else if (what == "preview") {
 		r_ret = get_item_preview(idx);
 	} else if (what == "custom_data") {
-		r_ret = get_custom_data_by_layer_id(idx, p_name.get_slicec('/', 3).to_int());
+		r_ret = get_custom_data_by_layer_id(idx, prop_name.get_slicec('/', 3).to_int());
 	} else {
 		return false;
 	}
