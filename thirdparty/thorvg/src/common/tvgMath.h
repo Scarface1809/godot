@@ -44,6 +44,18 @@ bool mathIdentity(const Matrix* m);
 void mathMultiply(Point* pt, const Matrix* transform);
 
 
+static inline float mathDeg2Rad(float degree)
+{
+     return degree * (MATH_PI / 180.0f);
+}
+
+
+static inline float mathRad2Deg(float radian)
+{
+    return radian * (180.0f / MATH_PI);
+}
+
+
 static inline bool mathZero(float a)
 {
     return (fabsf(a) < FLT_EPSILON) ? true : false;
@@ -70,7 +82,7 @@ static inline bool mathEqual(const Matrix& a, const Matrix& b)
 static inline bool mathRightAngle(const Matrix* m)
 {
    auto radian = fabsf(atan2f(m->e21, m->e11));
-   if (radian < FLT_EPSILON || mathEqual(radian, float(M_PI_2)) || mathEqual(radian, float(M_PI))) return true;
+   if (radian < FLT_EPSILON || mathEqual(radian, MATH_PI2) || mathEqual(radian, MATH_PI)) return true;
    return false;
 }
 

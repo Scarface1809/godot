@@ -55,7 +55,9 @@ static inline void setup_http_request(HTTPRequest *request) {
 }
 
 void EditorAssetLibraryItem::configure(const String &p_title, int p_asset_id, const String &p_category, int p_category_id, const String &p_author, int p_author_id, const String &p_cost) {
-	title->set_text(p_title);
+	title_text = p_title;
+	title->set_text(title_text);
+	title->set_tooltip_text(title_text);
 	asset_id = p_asset_id;
 	category->set_text(p_category);
 	category_id = p_category_id;
@@ -66,16 +68,15 @@ void EditorAssetLibraryItem::configure(const String &p_title, int p_asset_id, co
 
 // TODO: Refactor this method to use the TextServer.
 void EditorAssetLibraryItem::clamp_width(int p_max_width) {
-	int text_pixel_width = title->get_button_font().ptr()->get_string_size(title->get_text()).x * EDSCALE;
-
-	String full_text = title->get_text();
-	title->set_tooltip_text(full_text);
+	int text_pixel_width = title->get_button_font()->get_string_size(title_text).x * EDSCALE;
 
 	if (text_pixel_width > p_max_width) {
 		// Truncate title text to within the current column width.
-		int max_length = p_max_width / (text_pixel_width / full_text.length());
-		String truncated_text = full_text.left(max_length - 3) + "...";
+		int max_length = p_max_width / (text_pixel_width / title_text.length());
+		String truncated_text = title_text.left(max_length - 3) + "...";
 		title->set_text(truncated_text);
+	} else {
+		title->set_text(title_text);
 	}
 }
 
@@ -143,6 +144,7 @@ EditorAssetLibraryItem::EditorAssetLibraryItem(bool p_clickable) {
 	vb->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 
 	title = memnew(LinkButton);
+	title->set_auto_translate_mode(AutoTranslateMode::AUTO_TRANSLATE_MODE_DISABLED);
 	title->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
 	vb->add_child(title);
 
@@ -163,10 +165,10 @@ EditorAssetLibraryItem::EditorAssetLibraryItem(bool p_clickable) {
 	if (p_clickable) {
 		author->set_underline_mode(LinkButton::UNDERLINE_MODE_ON_HOVER);
 		icon->set_default_cursor_shape(CURSOR_POINTING_HAND);
-		icon->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
-		title->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
-		category->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_category_clicked));
-		author->connect("pressed", callable_mp(this, &EditorAssetLibraryItem::_author_clicked));
+		icon->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
+		title->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItem::_asset_clicked));
+		category->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItem::_category_clicked));
+		author->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItem::_author_clicked));
 	} else {
 		title->set_mouse_filter(MOUSE_FILTER_IGNORE);
 		category->set_mouse_filter(MOUSE_FILTER_IGNORE);
@@ -238,7 +240,7 @@ void EditorAssetLibraryItemDescription::_notification(int p_what) {
 	switch (p_what) {
 		case NOTIFICATION_ENTER_TREE:
 		case NOTIFICATION_THEME_CHANGED: {
-			previews_bg->add_theme_style_override("panel", previews->get_theme_stylebox(SNAME("normal"), SNAME("TextEdit")));
+			previews_bg->add_theme_style_override("panel", previews->get_theme_stylebox(CoreStringName(normal), SNAME("TextEdit")));
 		} break;
 	}
 }
@@ -301,7 +303,7 @@ void EditorAssetLibraryItemDescription::add_preview(int p_id, bool p_video, cons
 	new_preview.button = memnew(Button);
 	new_preview.button->set_icon(previews->get_editor_theme_icon(SNAME("ThumbnailWait")));
 	new_preview.button->set_toggle_mode(true);
-	new_preview.button->connect("pressed", callable_mp(this, &EditorAssetLibraryItemDescription::_preview_click).bind(p_id));
+	new_preview.button->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItemDescription::_preview_click).bind(p_id));
 	preview_hb->add_child(new_preview.button);
 	if (!p_video) {
 		new_preview.image = previews->get_editor_theme_icon(SNAME("ThumbnailWait"));
@@ -328,7 +330,7 @@ EditorAssetLibraryItemDescription::EditorAssetLibraryItemDescription() {
 	desc_vbox->add_child(description);
 	description->set_v_size_flags(Control::SIZE_EXPAND_FILL);
 	description->connect("meta_clicked", callable_mp(this, &EditorAssetLibraryItemDescription::_link_click));
-	description->add_theme_constant_override("line_separation", Math::round(5 * EDSCALE));
+	description->add_theme_constant_override(SceneStringName(line_separation), Math::round(5 * EDSCALE));
 
 	previews_vbox = memnew(VBoxContainer);
 	previews_vbox->hide(); // Will be shown if we add any previews later.
@@ -575,7 +577,7 @@ EditorAssetLibraryItemDownload::EditorAssetLibraryItemDownload() {
 	title->set_h_size_flags(Control::SIZE_EXPAND_FILL);
 
 	dismiss_button = memnew(TextureButton);
-	dismiss_button->connect("pressed", callable_mp(this, &EditorAssetLibraryItemDownload::_close));
+	dismiss_button->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItemDownload::_close));
 	title_hb->add_child(dismiss_button);
 
 	title->set_clip_text(true);
@@ -595,11 +597,11 @@ EditorAssetLibraryItemDownload::EditorAssetLibraryItemDownload() {
 	install_button = memnew(Button);
 	install_button->set_text(TTR("Install..."));
 	install_button->set_disabled(true);
-	install_button->connect("pressed", callable_mp(this, &EditorAssetLibraryItemDownload::install));
+	install_button->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItemDownload::install));
 
 	retry_button = memnew(Button);
 	retry_button->set_text(TTR("Retry"));
-	retry_button->connect("pressed", callable_mp(this, &EditorAssetLibraryItemDownload::_make_request));
+	retry_button->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibraryItemDownload::_make_request));
 	// Only show the Retry button in case of a failure.
 	retry_button->hide();
 
@@ -764,13 +766,13 @@ const char *EditorAssetLibrary::sort_text[SORT_MAX] = {
 };
 
 const char *EditorAssetLibrary::support_key[SUPPORT_MAX] = {
-	"official",
+	"official", // Former name for the Featured support level (still used on the API backend).
 	"community",
 	"testing",
 };
 
 const char *EditorAssetLibrary::support_text[SUPPORT_MAX] = {
-	TTRC("Official"),
+	TTRC("Featured"),
 	TTRC("Community"),
 	TTRC("Testing"),
 };
@@ -1132,7 +1134,7 @@ HBoxContainer *EditorAssetLibrary::_make_pages(int p_page, int p_page_count, int
 	first->set_text(TTR("First", "Pagination"));
 	first->set_theme_type_variation("PanelBackgroundButton");
 	if (p_page != 0) {
-		first->connect("pressed", callable_mp(this, &EditorAssetLibrary::_search).bind(0));
+		first->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibrary::_search).bind(0));
 	} else {
 		first->set_disabled(true);
 		first->set_focus_mode(Control::FOCUS_NONE);
@@ -1143,7 +1145,7 @@ HBoxContainer *EditorAssetLibrary::_make_pages(int p_page, int p_page_count, int
 	prev->set_text(TTR("Previous", "Pagination"));
 	prev->set_theme_type_variation("PanelBackgroundButton");
 	if (p_page > 0) {
-		prev->connect("pressed", callable_mp(this, &EditorAssetLibrary::_search).bind(p_page - 1));
+		prev->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibrary::_search).bind(p_page - 1));
 	} else {
 		prev->set_disabled(true);
 		prev->set_focus_mode(Control::FOCUS_NONE);
@@ -1160,7 +1162,7 @@ HBoxContainer *EditorAssetLibrary::_make_pages(int p_page, int p_page_count, int
 			current->set_disabled(true);
 			current->set_focus_mode(Control::FOCUS_NONE);
 		} else {
-			current->connect("pressed", callable_mp(this, &EditorAssetLibrary::_search).bind(i));
+			current->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibrary::_search).bind(i));
 		}
 		hbc->add_child(current);
 	}
@@ -1169,7 +1171,7 @@ HBoxContainer *EditorAssetLibrary::_make_pages(int p_page, int p_page_count, int
 	next->set_text(TTR("Next", "Pagination"));
 	next->set_theme_type_variation("PanelBackgroundButton");
 	if (p_page < p_page_count - 1) {
-		next->connect("pressed", callable_mp(this, &EditorAssetLibrary::_search).bind(p_page + 1));
+		next->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibrary::_search).bind(p_page + 1));
 	} else {
 		next->set_disabled(true);
 		next->set_focus_mode(Control::FOCUS_NONE);
@@ -1181,7 +1183,7 @@ HBoxContainer *EditorAssetLibrary::_make_pages(int p_page, int p_page_count, int
 	last->set_text(TTR("Last", "Pagination"));
 	last->set_theme_type_variation("PanelBackgroundButton");
 	if (p_page != p_page_count - 1) {
-		last->connect("pressed", callable_mp(this, &EditorAssetLibrary::_search).bind(p_page_count - 1));
+		last->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibrary::_search).bind(p_page_count - 1));
 	} else {
 		last->set_disabled(true);
 		last->set_focus_mode(Control::FOCUS_NONE);
@@ -1525,14 +1527,22 @@ void EditorAssetLibrary::_update_asset_items_columns() {
 		asset_items->set_columns(new_columns);
 	}
 
-	asset_items_column_width = (get_size().x / new_columns) - (100 * EDSCALE);
+	asset_items_column_width = (get_size().x / new_columns) - (120 * EDSCALE);
+
+	for (int i = 0; i < asset_items->get_child_count(); i++) {
+		EditorAssetLibraryItem *item = Object::cast_to<EditorAssetLibraryItem>(asset_items->get_child(i));
+		if (!item || !item->is_visible()) {
+			continue;
+		}
+		item->clamp_width(asset_items_column_width);
+	}
 }
 
 void EditorAssetLibrary::_set_library_message(const String &p_message) {
 	library_message->set_text(p_message);
 
 	if (library_message_action.is_valid()) {
-		library_message_button->disconnect("pressed", library_message_action);
+		library_message_button->disconnect(SceneStringName(pressed), library_message_action);
 		library_message_action = Callable();
 	}
 	library_message_button->hide();
@@ -1545,11 +1555,11 @@ void EditorAssetLibrary::_set_library_message_with_action(const String &p_messag
 
 	library_message_button->set_text(p_action_text);
 	if (library_message_action.is_valid()) {
-		library_message_button->disconnect("pressed", library_message_action);
+		library_message_button->disconnect(SceneStringName(pressed), library_message_action);
 		library_message_action = Callable();
 	}
 	library_message_action = p_action;
-	library_message_button->connect("pressed", library_message_action);
+	library_message_button->connect(SceneStringName(pressed), library_message_action);
 	library_message_button->show();
 
 	library_message_box->show();
@@ -1608,12 +1618,12 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 	Button *open_asset = memnew(Button);
 	open_asset->set_text(TTR("Import..."));
 	search_hb->add_child(open_asset);
-	open_asset->connect("pressed", callable_mp(this, &EditorAssetLibrary::_asset_open));
+	open_asset->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibrary::_asset_open));
 
 	Button *plugins = memnew(Button);
 	plugins->set_text(TTR("Plugins..."));
 	search_hb->add_child(plugins);
-	plugins->connect("pressed", callable_mp(this, &EditorAssetLibrary::_manage_plugins));
+	plugins->connect(SceneStringName(pressed), callable_mp(this, &EditorAssetLibrary::_manage_plugins));
 
 	if (p_templates_only) {
 		open_asset->hide();
@@ -1664,10 +1674,10 @@ EditorAssetLibrary::EditorAssetLibrary(bool p_templates_only) {
 	search_hb2->add_child(support);
 	support->set_text(TTR("Support"));
 	support->get_popup()->set_hide_on_checkable_item_selection(false);
-	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_OFFICIAL]), SUPPORT_OFFICIAL);
+	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_FEATURED]), SUPPORT_FEATURED);
 	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_COMMUNITY]), SUPPORT_COMMUNITY);
 	support->get_popup()->add_check_item(TTRGET(support_text[SUPPORT_TESTING]), SUPPORT_TESTING);
-	support->get_popup()->set_item_checked(SUPPORT_OFFICIAL, true);
+	support->get_popup()->set_item_checked(SUPPORT_FEATURED, true);
 	support->get_popup()->set_item_checked(SUPPORT_COMMUNITY, true);
 	support->get_popup()->connect("id_pressed", callable_mp(this, &EditorAssetLibrary::_support_toggled));
 

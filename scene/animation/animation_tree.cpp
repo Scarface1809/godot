@@ -34,7 +34,6 @@
 #include "animation_blend_tree.h"
 #include "core/config/engine.h"
 #include "scene/animation/animation_player.h"
-#include "scene/scene_string_names.h"
 
 void AnimationNode::get_parameter_list(List<PropertyInfo> *r_list) const {
 	Array parameters;
@@ -395,11 +394,11 @@ bool AnimationNode::is_filter_enabled() const {
 	return filter_enabled;
 }
 
-void AnimationNode::set_closable(bool p_closable) {
+void AnimationNode::set_deletable(bool p_closable) {
 	closable = p_closable;
 }
 
-bool AnimationNode::is_closable() const {
+bool AnimationNode::is_deletable() const {
 	return closable;
 }
 
@@ -627,7 +626,7 @@ bool AnimationTree::_blend_pre_process(double p_delta, int p_track_count, const 
 		for (int i = 0; i < p_track_count; i++) {
 			src_blendsw[i] = 1.0; // By default all go to 1 for the root input.
 		}
-		root_animation_node->node_state.base_path = SceneStringNames::get_singleton()->parameters_base_path;
+		root_animation_node->node_state.base_path = SceneStringName(parameters_base_path);
 		root_animation_node->node_state.parent = nullptr;
 	}
 
@@ -788,7 +787,7 @@ void AnimationTree::_update_properties() {
 	input_activity_map_get.clear();
 
 	if (root_animation_node.is_valid()) {
-		_update_properties_for_node(SceneStringNames::get_singleton()->parameters_base_path, root_animation_node);
+		_update_properties_for_node(SceneStringName(parameters_base_path), root_animation_node);
 	}
 
 	properties_dirty = false;
@@ -810,15 +809,12 @@ void AnimationTree::_notification(int p_what) {
 void AnimationTree::set_animation_player(const NodePath &p_path) {
 	animation_player = p_path;
 	if (p_path.is_empty()) {
-		set_root_node(SceneStringNames::get_singleton()->path_pp);
+		set_root_node(SceneStringName(path_pp));
 		while (animation_libraries.size()) {
 			remove_animation_library(animation_libraries[0].name);
 		}
 	}
-#ifdef TOOLS_ENABLED
 	emit_signal(SNAME("animation_player_changed")); // Needs to unpin AnimationPlayerEditor.
-	emit_signal(SNAME("mixer_updated"));
-#endif // TOOLS_ENABLED
 	_setup_animation_player();
 	notify_property_list_changed();
 }
@@ -857,10 +853,10 @@ void AnimationTree::_setup_animation_player() {
 		}
 		List<StringName> list;
 		player->get_animation_library_list(&list);
-		for (int i = 0; i < list.size(); i++) {
-			Ref<AnimationLibrary> lib = player->get_animation_library(list[i]);
+		for (const StringName &E : list) {
+			Ref<AnimationLibrary> lib = player->get_animation_library(E);
 			if (lib.is_valid()) {
-				add_animation_library(list[i], lib);
+				add_animation_library(E, lib);
 			}
 		}
 	}
@@ -964,9 +960,7 @@ void AnimationTree::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "advance_expression_base_node", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "Node"), "set_advance_expression_base_node", "get_advance_expression_base_node");
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "anim_player", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "AnimationPlayer"), "set_animation_player", "get_animation_player");
 
-#ifdef TOOLS_ENABLED
 	ADD_SIGNAL(MethodInfo(SNAME("animation_player_changed")));
-#endif // TOOLS_ENABLED
 }
 
 AnimationTree::AnimationTree() {

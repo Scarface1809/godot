@@ -498,6 +498,7 @@ public:
 		Vector<ExpressionNode *> arguments;
 		StringName function_name;
 		bool is_super = false;
+		bool is_static = false;
 
 		CallNode() {
 			type = CALL;
@@ -901,8 +902,11 @@ public:
 			VariableNode *variable_source;
 			ConstantNode *constant_source;
 			SignalNode *signal_source;
+			FunctionNode *function_source;
 		};
-		FunctionNode *source_function = nullptr;
+		bool function_source_is_static = false; // For non-GDScript scripts.
+
+		FunctionNode *source_function = nullptr; // TODO: Rename to disambiguate `function_source`.
 
 		int usages = 0; // Useful for binds/iterator variable.
 
@@ -1320,6 +1324,7 @@ public:
 
 private:
 	friend class GDScriptAnalyzer;
+	friend class GDScriptParserRef;
 
 	bool _is_tool = false;
 	String script_path;
@@ -1328,6 +1333,7 @@ private:
 	bool can_break = false;
 	bool can_continue = false;
 	List<bool> multiline_stack;
+	HashMap<String, Ref<GDScriptParserRef>> depended_parsers;
 
 	ClassNode *head = nullptr;
 	Node *list = nullptr;
@@ -1491,6 +1497,7 @@ private:
 	bool onready_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class);
 	template <PropertyHint t_hint, Variant::Type t_type>
 	bool export_annotations(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class);
+	bool export_storage_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class);
 	bool export_custom_annotation(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class);
 	template <PropertyUsageFlags t_usage>
 	bool export_group_annotations(const AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class);
@@ -1557,6 +1564,8 @@ public:
 	Error parse_binary(const Vector<uint8_t> &p_binary, const String &p_script_path);
 	ClassNode *get_tree() const { return head; }
 	bool is_tool() const { return _is_tool; }
+	Ref<GDScriptParserRef> get_depended_parser_for(const String &p_path);
+	const HashMap<String, Ref<GDScriptParserRef>> &get_depended_parsers();
 	ClassNode *find_class(const String &p_qualified_name) const;
 	bool has_class(const GDScriptParser::ClassNode *p_class) const;
 	static Variant::Type get_builtin_type(const StringName &p_type); // Excluding `Variant::NIL` and `Variant::OBJECT`.

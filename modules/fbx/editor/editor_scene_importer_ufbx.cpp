@@ -87,7 +87,7 @@ Node *EditorSceneFormatImporterUFBX::import_scene(const String &p_path, uint32_t
 		}
 		return nullptr;
 	}
-	return fbx->generate_scene(state, (float)p_options["animation/fps"], (bool)p_options["animation/trimming"], (bool)p_options["animation/remove_immutable_tracks"]);
+	return fbx->generate_scene(state, (float)p_options["animation/fps"], (bool)p_options["animation/trimming"], false);
 }
 
 Variant EditorSceneFormatImporterUFBX::get_option_visibility(const String &p_path, bool p_for_animation,
@@ -111,7 +111,7 @@ void EditorSceneFormatImporterUFBX::get_import_options(const String &p_path,
 
 void EditorSceneFormatImporterUFBX::handle_compatibility_options(HashMap<StringName, Variant> &p_import_params) const {
 	if (!p_import_params.has("fbx/importer")) {
-		p_import_params["fbx/importer"] = EditorSceneFormatImporterUFBX::FBX_IMPORTER_UFBX;
+		p_import_params["fbx/importer"] = EditorSceneFormatImporterUFBX::FBX_IMPORTER_FBX2GLTF;
 	}
 }
 

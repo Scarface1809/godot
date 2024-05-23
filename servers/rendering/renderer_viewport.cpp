@@ -85,7 +85,7 @@ Vector<RendererViewport::Viewport *> RendererViewport::_sort_active_viewports() 
 	}
 
 	while (!nodes.is_empty()) {
-		const Viewport *node = nodes[0];
+		const Viewport *node = nodes.front()->get();
 		nodes.pop_front();
 
 		for (int i = active_viewports.size() - 1; i >= 0; --i) {
@@ -678,7 +678,7 @@ void RendererViewport::draw_viewports(bool p_swap_buffers) {
 #endif // _3D_DISABLED
 
 	if (Engine::get_singleton()->is_editor_hint()) {
-		set_default_clear_color(GLOBAL_GET("rendering/environment/defaults/default_clear_color"));
+		RSG::texture_storage->set_default_clear_color(GLOBAL_GET("rendering/environment/defaults/default_clear_color"));
 	}
 
 	if (sorted_active_viewports_dirty) {
@@ -802,8 +802,6 @@ void RendererViewport::draw_viewports(bool p_swap_buffers) {
 		} else
 #endif // _3D_DISABLED
 		{
-			RSG::texture_storage->render_target_set_override(vp->render_target, RID(), RID(), RID());
-
 			RSG::scene->set_debug_draw_mode(vp->debug_draw);
 
 			// render standard mono camera
@@ -1062,6 +1060,13 @@ void RendererViewport::viewport_set_update_mode(RID p_viewport, RS::ViewportUpda
 	viewport->update_mode = p_mode;
 }
 
+RS::ViewportUpdateMode RendererViewport::viewport_get_update_mode(RID p_viewport) const {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL_V(viewport, RS::VIEWPORT_UPDATE_DISABLED);
+
+	return viewport->update_mode;
+}
+
 RID RendererViewport::viewport_get_render_target(RID p_viewport) const {
 	const Viewport *viewport = viewport_owner.get_or_null(p_viewport);
 	ERR_FAIL_NULL_V(viewport, RID());
@@ -1191,6 +1196,9 @@ void RendererViewport::viewport_set_canvas_transform(RID p_viewport, RID p_canva
 void RendererViewport::viewport_set_transparent_background(RID p_viewport, bool p_enabled) {
 	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
 	ERR_FAIL_NULL(viewport);
+	if (viewport->transparent_bg == p_enabled) {
+		return;
+	}
 
 	RSG::texture_storage->render_target_set_transparent(viewport->render_target, p_enabled);
 	viewport->transparent_bg = p_enabled;
@@ -1442,6 +1450,13 @@ void RendererViewport::viewport_set_vrs_mode(RID p_viewport, RS::ViewportVRSMode
 	_configure_3d_render_buffers(viewport);
 }
 
+void RendererViewport::viewport_set_vrs_update_mode(RID p_viewport, RS::ViewportVRSUpdateMode p_mode) {
+	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
+	ERR_FAIL_NULL(viewport);
+
+	RSG::texture_storage->render_target_set_vrs_update_mode(viewport->render_target, p_mode);
+}
+
 void RendererViewport::viewport_set_vrs_texture(RID p_viewport, RID p_texture) {
 	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
 	ERR_FAIL_NULL(viewport);
@@ -1504,10 +1519,6 @@ void RendererViewport::handle_timestamp(String p_timestamp, uint64_t p_cpu_time,
 		viewport->time_cpu_end = p_cpu_time;
 		viewport->time_gpu_end = p_gpu_time;
 	}
-}
-
-void RendererViewport::set_default_clear_color(const Color &p_color) {
-	RSG::texture_storage->set_default_clear_color(p_color);
 }
 
 void RendererViewport::viewport_set_canvas_cull_mask(RID p_viewport, uint32_t p_canvas_cull_mask) {

@@ -101,6 +101,7 @@ public:
 	RenderSceneBuffersGLES3();
 	virtual ~RenderSceneBuffersGLES3();
 	virtual void configure(const RenderSceneBuffersConfiguration *p_config) override;
+	void configure_for_probe(Size2i p_size);
 
 	virtual void set_fsr_sharpness(float p_fsr_sharpness) override{};
 	virtual void set_texture_mipmap_bias(float p_texture_mipmap_bias) override{};
@@ -109,7 +110,7 @@ public:
 	void free_render_buffer_data();
 
 	void check_backbuffer(bool p_need_color, bool p_need_depth); // Check if we need to initialize our backbuffer.
-	void check_glow_buffers(); // Check if we need to initialise our glow buffers.
+	void check_glow_buffers(); // Check if we need to initialize our glow buffers.
 
 	GLuint get_render_fbo();
 	GLuint get_msaa3d_fbo() {

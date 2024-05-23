@@ -298,13 +298,13 @@ Node *EditorSceneFormatImporterBlend::import_scene(const String &p_path, uint32_
 		}
 		return nullptr;
 	}
+	ERR_FAIL_COND_V(!p_options.has("animation/fps"), nullptr);
 
 #ifndef DISABLE_DEPRECATED
 	bool trimming = p_options.has("animation/trimming") ? (bool)p_options["animation/trimming"] : false;
-	bool remove_immutable = p_options.has("animation/remove_immutable_tracks") ? (bool)p_options["animation/remove_immutable_tracks"] : true;
-	return gltf->generate_scene(state, (float)p_options["animation/fps"], trimming, remove_immutable);
+	return gltf->generate_scene(state, (float)p_options["animation/fps"], trimming, false);
 #else
-	return gltf->generate_scene(state, (float)p_options["animation/fps"], (bool)p_options["animation/trimming"], (bool)p_options["animation/remove_immutable_tracks"]);
+	return gltf->generate_scene(state, (float)p_options["animation/fps"], (bool)p_options["animation/trimming"], false);
 #endif
 }
 
@@ -493,7 +493,7 @@ bool EditorFileSystemImportFormatSupportQueryBlend::query() {
 
 		blender_path_browse = memnew(Button);
 		blender_path_browse->set_text(TTR("Browse"));
-		blender_path_browse->connect("pressed", callable_mp(this, &EditorFileSystemImportFormatSupportQueryBlend::_browse_install));
+		blender_path_browse->connect(SceneStringName(pressed), callable_mp(this, &EditorFileSystemImportFormatSupportQueryBlend::_browse_install));
 		hb->add_child(blender_path_browse);
 
 		hb->set_h_size_flags(Control::SIZE_EXPAND_FILL);

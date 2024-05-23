@@ -36,13 +36,13 @@
 #include "editor/themes/editor_scale.h"
 
 static bool _property_path_matches(const String &p_property_path, const String &p_filter, EditorPropertyNameProcessor::Style p_style) {
-	if (p_property_path.findn(p_filter) != -1) {
+	if (p_property_path.containsn(p_filter)) {
 		return true;
 	}
 
 	const Vector<String> sections = p_property_path.split("/");
 	for (int i = 0; i < sections.size(); i++) {
-		if (p_filter.is_subsequence_ofn(EditorPropertyNameProcessor::get_singleton()->process_name(sections[i], p_style))) {
+		if (p_filter.is_subsequence_ofn(EditorPropertyNameProcessor::get_singleton()->process_name(sections[i], p_style, p_property_path))) {
 			return true;
 		}
 	}
@@ -278,8 +278,8 @@ void SectionedInspector::update_category_list() {
 				TreeItem *ms = sections->create_item(parent);
 				section_map[metasection] = ms;
 
-				const String text = EditorPropertyNameProcessor::get_singleton()->process_name(sectionarr[i], name_style);
-				const String tooltip = EditorPropertyNameProcessor::get_singleton()->process_name(sectionarr[i], tooltip_style);
+				const String text = EditorPropertyNameProcessor::get_singleton()->process_name(sectionarr[i], name_style, pi.name);
+				const String tooltip = EditorPropertyNameProcessor::get_singleton()->process_name(sectionarr[i], tooltip_style, pi.name);
 
 				ms->set_text(0, text);
 				ms->set_tooltip_text(0, tooltip);

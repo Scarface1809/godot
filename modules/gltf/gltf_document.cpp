@@ -105,10 +105,6 @@ static Ref<ImporterMesh> _mesh_to_importer_mesh(Ref<Mesh> p_mesh) {
 }
 
 Error GLTFDocument::_serialize(Ref<GLTFState> p_state) {
-	if (!p_state->buffers.size()) {
-		p_state->buffers.push_back(Vector<uint8_t>());
-	}
-
 	for (Ref<GLTFDocumentExtension> ext : document_extensions) {
 		ERR_CONTINUE(ext.is_null());
 		Error err = ext->export_preserialize(p_state);
@@ -243,7 +239,6 @@ Error GLTFDocument::_serialize_gltf_extensions(Ref<GLTFState> p_state) const {
 }
 
 Error GLTFDocument::_serialize_scenes(Ref<GLTFState> p_state) {
-	ERR_FAIL_COND_V_MSG(p_state->root_nodes.is_empty(), ERR_INVALID_DATA, "GLTF export: The scene must have at least one root node.");
 	// Godot only supports one scene per glTF file.
 	Array scenes;
 	Dictionary scene_dict;
@@ -251,7 +246,9 @@ Error GLTFDocument::_serialize_scenes(Ref<GLTFState> p_state) {
 	p_state->json["scenes"] = scenes;
 	p_state->json["scene"] = 0;
 	// Add nodes to the scene dict.
-	scene_dict["nodes"] = p_state->root_nodes;
+	if (!p_state->root_nodes.is_empty()) {
+		scene_dict["nodes"] = p_state->root_nodes;
+	}
 	if (!p_state->scene_name.is_empty()) {
 		scene_dict["name"] = p_state->scene_name;
 	}
@@ -458,9 +455,15 @@ Error GLTFDocument::_serialize_nodes(Ref<GLTFState> p_state) {
 			ERR_CONTINUE(err != OK);
 		}
 
+		if (extensions.is_empty()) {
+			node.erase("extensions");
+		}
+
 		nodes.push_back(node);
 	}
-	p_state->json["nodes"] = nodes;
+	if (!nodes.is_empty()) {
+		p_state->json["nodes"] = nodes;
+	}
 	return OK;
 }
 
@@ -691,11 +694,11 @@ static Vector<uint8_t> _parse_base64_uri(const String &p_uri) {
 Error GLTFDocument::_encode_buffer_glb(Ref<GLTFState> p_state, const String &p_path) {
 	print_verbose("glTF: Total buffers: " + itos(p_state->buffers.size()));
 
-	if (!p_state->buffers.size()) {
+	if (p_state->buffers.is_empty()) {
 		return OK;
 	}
 	Array buffers;
-	if (p_state->buffers.size()) {
+	if (!p_state->buffers.is_empty()) {
 		Vector<uint8_t> buffer_data = p_state->buffers[0];
 		Dictionary gltf_buffer;
 
@@ -730,7 +733,7 @@ Error GLTFDocument::_encode_buffer_glb(Ref<GLTFState> p_state, const String &p_p
 Error GLTFDocument::_encode_buffer_bins(Ref<GLTFState> p_state, const String &p_path) {
 	print_verbose("glTF: Total buffers: " + itos(p_state->buffers.size()));
 
-	if (!p_state->buffers.size()) {
+	if (p_state->buffers.is_empty()) {
 		return OK;
 	}
 	Array buffers;
@@ -1543,6 +1546,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_ints(Ref<GLTFState> p_state,
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_SCALAR;
 	int component_type;
@@ -1654,6 +1660,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_vec2(Ref<GLTFState> p_state,
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_VEC2;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -1704,6 +1713,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_color(Ref<GLTFState> p_state
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -1768,6 +1780,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_weights(Ref<GLTFState> p_sta
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -1816,6 +1831,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_joints(Ref<GLTFState> p_stat
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_UNSIGNED_SHORT;
@@ -1866,6 +1884,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_quaternions(Ref<GLTFState> p
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_VEC4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -1938,6 +1959,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_floats(Ref<GLTFState> p_stat
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_SCALAR;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -1985,6 +2009,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_vec3(Ref<GLTFState> p_state,
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_VEC3;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -2058,6 +2085,9 @@ GLTFAccessorIndex GLTFDocument::_encode_sparse_accessor_as_vec3(Ref<GLTFState> p
 
 	Ref<GLTFAccessor> sparse_accessor;
 	sparse_accessor.instantiate();
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_VEC3;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -2160,6 +2190,9 @@ GLTFAccessorIndex GLTFDocument::_encode_accessor_as_xform(Ref<GLTFState> p_state
 	Ref<GLTFAccessor> accessor;
 	accessor.instantiate();
 	GLTFBufferIndex buffer_view_i;
+	if (p_state->buffers.is_empty()) {
+		p_state->buffers.push_back(Vector<uint8_t>());
+	}
 	int64_t size = p_state->buffers[0].size();
 	const GLTFType type = GLTFType::TYPE_MAT4;
 	const int component_type = GLTFDocument::COMPONENT_TYPE_FLOAT;
@@ -3059,7 +3092,17 @@ Error GLTFDocument::_parse_meshes(Ref<GLTFState> p_state) {
 				array[Mesh::ARRAY_TANGENT] = tangents;
 			}
 
-			if (p_state->force_disable_compression || !a.has("POSITION") || !a.has("NORMAL") || p.has("targets") || (a.has("JOINTS_0") || a.has("JOINTS_1"))) {
+			// Disable compression if all z equals 0 (the mesh is 2D).
+			const Vector<Vector3> &vertices = array[Mesh::ARRAY_VERTEX];
+			bool is_mesh_2d = true;
+			for (int k = 0; k < vertices.size(); k++) {
+				if (!Math::is_zero_approx(vertices[k].z)) {
+					is_mesh_2d = false;
+					break;
+				}
+			}
+
+			if (p_state->force_disable_compression || is_mesh_2d || !a.has("POSITION") || !a.has("NORMAL") || p.has("targets") || (a.has("JOINTS_0") || a.has("JOINTS_1"))) {
 				flags &= ~RS::ARRAY_FLAG_COMPRESS_ATTRIBUTES;
 			}
 
@@ -5675,6 +5718,9 @@ void GLTFDocument::_generate_skeleton_bone_node(Ref<GLTFState> p_state, const GL
 
 	active_skeleton = skeleton;
 	current_node = active_skeleton;
+	if (active_skeleton) {
+		p_scene_parent = active_skeleton;
+	}
 
 	if (requires_extra_node) {
 		current_node = nullptr;
@@ -5868,6 +5914,7 @@ void GLTFDocument::_import_animation(Ref<GLTFState> p_state, AnimationPlayer *p_
 	Ref<Animation> animation;
 	animation.instantiate();
 	animation->set_name(anim_name);
+	animation->set_step(1.0 / p_bake_fps);
 
 	if (anim->get_loop()) {
 		animation->set_loop_mode(Animation::LOOP_LINEAR);
@@ -6930,7 +6977,7 @@ Error GLTFDocument::_serialize_file(Ref<GLTFState> p_state, const String p_path)
 		const uint32_t text_chunk_type = 0x4E4F534A; //JSON
 
 		uint32_t binary_data_length = 0;
-		if (p_state->buffers.size()) {
+		if (p_state->buffers.size() > 0) {
 			binary_data_length = p_state->buffers[0].size();
 		}
 		const uint32_t binary_chunk_length = ((binary_data_length + 3) & (~3));
@@ -6939,20 +6986,28 @@ Error GLTFDocument::_serialize_file(Ref<GLTFState> p_state, const String p_path)
 		file->create(FileAccess::ACCESS_RESOURCES);
 		file->store_32(magic);
 		file->store_32(p_state->major_version); // version
-		file->store_32(header_size + chunk_header_size + text_chunk_length + chunk_header_size + binary_chunk_length); // length
+		uint32_t total_length = header_size + chunk_header_size + text_chunk_length;
+		if (binary_chunk_length) {
+			total_length += chunk_header_size + binary_chunk_length;
+		}
+		file->store_32(total_length);
+
+		// Write the JSON text chunk.
 		file->store_32(text_chunk_length);
 		file->store_32(text_chunk_type);
 		file->store_buffer((uint8_t *)&cs[0], cs.length());
 		for (uint32_t pad_i = text_data_length; pad_i < text_chunk_length; pad_i++) {
 			file->store_8(' ');
 		}
+
+		// Write a single binary chunk.
 		if (binary_chunk_length) {
 			file->store_32(binary_chunk_length);
 			file->store_32(binary_chunk_type);
 			file->store_buffer(p_state->buffers[0].ptr(), binary_data_length);
-		}
-		for (uint32_t pad_i = binary_data_length; pad_i < binary_chunk_length; pad_i++) {
-			file->store_8(0);
+			for (uint32_t pad_i = binary_data_length; pad_i < binary_chunk_length; pad_i++) {
+				file->store_8(0);
+			}
 		}
 	} else {
 		err = _encode_buffer_bins(p_state, p_path);
@@ -7018,7 +7073,7 @@ void GLTFDocument::_build_parent_hierachy(Ref<GLTFState> p_state) {
 Vector<Ref<GLTFDocumentExtension>> GLTFDocument::all_document_extensions;
 
 void GLTFDocument::register_gltf_document_extension(Ref<GLTFDocumentExtension> p_extension, bool p_first_priority) {
-	if (all_document_extensions.find(p_extension) == -1) {
+	if (!all_document_extensions.has(p_extension)) {
 		if (p_first_priority) {
 			all_document_extensions.insert(0, p_extension);
 		} else {
@@ -7059,7 +7114,7 @@ PackedByteArray GLTFDocument::_serialize_glb_buffer(Ref<GLTFState> p_state, Erro
 
 	const uint32_t text_chunk_type = 0x4E4F534A; //JSON
 	int32_t binary_data_length = 0;
-	if (p_state->buffers.size()) {
+	if (p_state->buffers.size() > 0) {
 		binary_data_length = p_state->buffers[0].size();
 	}
 	const int32_t binary_chunk_length = binary_data_length;
@@ -7094,6 +7149,9 @@ Node *GLTFDocument::_generate_scene_node_tree(Ref<GLTFState> p_state) {
 	if (p_state->extensions_used.has("GODOT_single_root")) {
 		_generate_scene_node(p_state, 0, nullptr, nullptr);
 		single_root = p_state->scene_nodes[0];
+		if (single_root && single_root->get_owner() && single_root->get_owner() != single_root) {
+			single_root = single_root->get_owner();
+		}
 	} else {
 		single_root = memnew(Node3D);
 		for (int32_t root_i = 0; root_i < p_state->root_nodes.size(); root_i++) {
@@ -7284,6 +7342,7 @@ Node *GLTFDocument::generate_scene(Ref<GLTFState> p_state, float p_bake_fps, boo
 }
 
 Error GLTFDocument::append_from_scene(Node *p_node, Ref<GLTFState> p_state, uint32_t p_flags) {
+	ERR_FAIL_NULL_V(p_node, FAILED);
 	Ref<GLTFState> state = p_state;
 	ERR_FAIL_COND_V(state.is_null(), FAILED);
 	state->use_named_skin_binds = p_flags & GLTF_IMPORT_USE_NAMED_SKIN_BINDS;

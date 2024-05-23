@@ -160,15 +160,18 @@ void main() {
 	if (gl_VertexID % 3 == 0) {
 		vertex = read_draw_data_point_a;
 		uv = read_draw_data_uv_a;
-		color = vec4(unpackHalf2x16(read_draw_data_color_a_rg), unpackHalf2x16(read_draw_data_color_a_ba));
+		color.xy = unpackHalf2x16(read_draw_data_color_a_rg);
+		color.zw = unpackHalf2x16(read_draw_data_color_a_ba);
 	} else if (gl_VertexID % 3 == 1) {
 		vertex = read_draw_data_point_b;
 		uv = read_draw_data_uv_b;
-		color = vec4(unpackHalf2x16(read_draw_data_color_b_rg), unpackHalf2x16(read_draw_data_color_b_ba));
+		color.xy = unpackHalf2x16(read_draw_data_color_b_rg);
+		color.zw = unpackHalf2x16(read_draw_data_color_b_ba);
 	} else {
 		vertex = read_draw_data_point_c;
 		uv = read_draw_data_uv_c;
-		color = vec4(unpackHalf2x16(read_draw_data_color_c_rg), unpackHalf2x16(read_draw_data_color_c_ba));
+		color.xy = unpackHalf2x16(read_draw_data_color_c_rg);
+		color.zw = unpackHalf2x16(read_draw_data_color_c_ba);
 	}
 
 #elif defined(USE_ATTRIBUTES)
@@ -178,11 +181,14 @@ void main() {
 
 #ifdef USE_INSTANCING
 	if (bool(read_draw_data_flags & FLAGS_INSTANCING_HAS_COLORS)) {
-		vec4 instance_color = vec4(unpackHalf2x16(instance_color_custom_data.x), unpackHalf2x16(instance_color_custom_data.y));
+		vec4 instance_color;
+		instance_color.xy = unpackHalf2x16(uint(instance_color_custom_data.x));
+		instance_color.zw = unpackHalf2x16(uint(instance_color_custom_data.y));
 		color *= instance_color;
 	}
 	if (bool(read_draw_data_flags & FLAGS_INSTANCING_HAS_CUSTOM_DATA)) {
-		instance_custom = vec4(unpackHalf2x16(instance_color_custom_data.z), unpackHalf2x16(instance_color_custom_data.w));
+		instance_custom.xy = unpackHalf2x16(instance_color_custom_data.z);
+		instance_custom.zw = unpackHalf2x16(instance_color_custom_data.w);
 	}
 #endif // !USE_INSTANCING
 
@@ -770,6 +776,12 @@ void main() {
 
 		vec2 tex_uv = (vec4(vertex, 0.0, 1.0) * mat4(light_array[light_base].texture_matrix[0], light_array[light_base].texture_matrix[1], vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0))).xy; //multiply inverse given its transposed. Optimizer removes useless operations.
 		vec2 tex_uv_atlas = tex_uv * light_array[light_base].atlas_rect.zw + light_array[light_base].atlas_rect.xy;
+
+		if (any(lessThan(tex_uv, vec2(0.0, 0.0))) || any(greaterThanEqual(tex_uv, vec2(1.0, 1.0)))) {
+			//if outside the light texture, light color is zero
+			continue;
+		}
+
 		vec4 light_color = textureLod(atlas_texture, tex_uv_atlas, 0.0);
 		vec4 light_base_color = light_array[light_base].color;
 
@@ -794,10 +806,6 @@ void main() {
 			light_color.rgb *= base_color.rgb;
 		}
 #endif
-		if (any(lessThan(tex_uv, vec2(0.0, 0.0))) || any(greaterThanEqual(tex_uv, vec2(1.0, 1.0)))) {
-			//if outside the light texture, light color is zero
-			light_color.a = 0.0;
-		}
 
 		if (bool(light_array[light_base].flags & LIGHT_FLAGS_HAS_SHADOW)) {
 			vec2 shadow_pos = (vec4(shadow_vertex, 0.0, 1.0) * mat4(light_array[light_base].shadow_matrix[0], light_array[light_base].shadow_matrix[1], vec4(0.0, 0.0, 1.0, 0.0), vec4(0.0, 0.0, 0.0, 1.0))).xy; //multiply inverse given its transposed. Optimizer removes useless operations.

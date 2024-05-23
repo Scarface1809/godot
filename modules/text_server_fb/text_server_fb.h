@@ -303,10 +303,10 @@ class TextServerFallback : public TextServerExtension {
 
 	_FORCE_INLINE_ FontTexturePosition find_texture_pos_for_glyph(FontForSizeFallback *p_data, int p_color_size, Image::Format p_image_format, int p_width, int p_height, bool p_msdf) const;
 #ifdef MODULE_MSDFGEN_ENABLED
-	_FORCE_INLINE_ FontGlyph rasterize_msdf(FontFallback *p_font_data, FontForSizeFallback *p_data, int p_pixel_range, int p_rect_margin, FT_Outline *outline, const Vector2 &advance) const;
+	_FORCE_INLINE_ FontGlyph rasterize_msdf(FontFallback *p_font_data, FontForSizeFallback *p_data, int p_pixel_range, int p_rect_margin, FT_Outline *p_outline, const Vector2 &p_advance) const;
 #endif
 #ifdef MODULE_FREETYPE_ENABLED
-	_FORCE_INLINE_ FontGlyph rasterize_bitmap(FontForSizeFallback *p_data, int p_rect_margin, FT_Bitmap bitmap, int yofs, int xofs, const Vector2 &advance, bool p_bgra) const;
+	_FORCE_INLINE_ FontGlyph rasterize_bitmap(FontForSizeFallback *p_data, int p_rect_margin, FT_Bitmap p_bitmap, int p_yofs, int p_xofs, const Vector2 &p_advance, bool p_bgra) const;
 #endif
 	_FORCE_INLINE_ bool _ensure_glyph(FontFallback *p_font_data, const Vector2i &p_size, int32_t p_glyph) const;
 	_FORCE_INLINE_ bool _ensure_cache_for_size(FontFallback *p_font_data, const Vector2i &p_size) const;
@@ -335,54 +335,54 @@ class TextServerFallback : public TextServerExtension {
 
 	_FORCE_INLINE_ int _font_get_weight_by_name(const String &p_sty_name) const {
 		String sty_name = p_sty_name.replace(" ", "").replace("-", "");
-		if (sty_name.find("thin") >= 0 || sty_name.find("hairline") >= 0) {
+		if (sty_name.contains("thin") || sty_name.contains("hairline")) {
 			return 100;
-		} else if (sty_name.find("extralight") >= 0 || sty_name.find("ultralight") >= 0) {
+		} else if (sty_name.contains("extralight") || sty_name.contains("ultralight")) {
 			return 200;
-		} else if (sty_name.find("light") >= 0) {
+		} else if (sty_name.contains("light")) {
 			return 300;
-		} else if (sty_name.find("semilight") >= 0) {
+		} else if (sty_name.contains("semilight")) {
 			return 350;
-		} else if (sty_name.find("regular") >= 0) {
+		} else if (sty_name.contains("regular")) {
 			return 400;
-		} else if (sty_name.find("medium") >= 0) {
+		} else if (sty_name.contains("medium")) {
 			return 500;
-		} else if (sty_name.find("semibold") >= 0 || sty_name.find("demibold") >= 0) {
+		} else if (sty_name.contains("semibold") || sty_name.contains("demibold")) {
 			return 600;
-		} else if (sty_name.find("bold") >= 0) {
+		} else if (sty_name.contains("bold")) {
 			return 700;
-		} else if (sty_name.find("extrabold") >= 0 || sty_name.find("ultrabold") >= 0) {
+		} else if (sty_name.contains("extrabold") || sty_name.contains("ultrabold")) {
 			return 800;
-		} else if (sty_name.find("black") >= 0 || sty_name.find("heavy") >= 0) {
+		} else if (sty_name.contains("black") || sty_name.contains("heavy")) {
 			return 900;
-		} else if (sty_name.find("extrablack") >= 0 || sty_name.find("ultrablack") >= 0) {
+		} else if (sty_name.contains("extrablack") || sty_name.contains("ultrablack")) {
 			return 950;
 		}
 		return 400;
 	}
 	_FORCE_INLINE_ int _font_get_stretch_by_name(const String &p_sty_name) const {
 		String sty_name = p_sty_name.replace(" ", "").replace("-", "");
-		if (sty_name.find("ultracondensed") >= 0) {
+		if (sty_name.contains("ultracondensed")) {
 			return 50;
-		} else if (sty_name.find("extracondensed") >= 0) {
+		} else if (sty_name.contains("extracondensed")) {
 			return 63;
-		} else if (sty_name.find("condensed") >= 0) {
+		} else if (sty_name.contains("condensed")) {
 			return 75;
-		} else if (sty_name.find("semicondensed") >= 0) {
+		} else if (sty_name.contains("semicondensed")) {
 			return 87;
-		} else if (sty_name.find("semiexpanded") >= 0) {
+		} else if (sty_name.contains("semiexpanded")) {
 			return 113;
-		} else if (sty_name.find("expanded") >= 0) {
+		} else if (sty_name.contains("expanded")) {
 			return 125;
-		} else if (sty_name.find("extraexpanded") >= 0) {
+		} else if (sty_name.contains("extraexpanded")) {
 			return 150;
-		} else if (sty_name.find("ultraexpanded") >= 0) {
+		} else if (sty_name.contains("ultraexpanded")) {
 			return 200;
 		}
 		return 100;
 	}
 	_FORCE_INLINE_ bool _is_ital_style(const String &p_sty_name) const {
-		return (p_sty_name.find("italic") >= 0) || (p_sty_name.find("oblique") >= 0);
+		return p_sty_name.contains("italic") || p_sty_name.contains("oblique");
 	}
 
 	// Shaped text cache data.
@@ -848,6 +848,7 @@ public:
 
 	MODBIND2RC(String, string_to_upper, const String &, const String &);
 	MODBIND2RC(String, string_to_lower, const String &, const String &);
+	MODBIND2RC(String, string_to_title, const String &, const String &);
 
 	MODBIND0(cleanup);
 

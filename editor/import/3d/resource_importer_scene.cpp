@@ -279,7 +279,7 @@ bool ResourceImporterScene::get_option_visibility(const String &p_path, const St
 		}
 	}
 
-	if (animation_importer && (p_option.begins_with("nodes/") || p_option.begins_with("meshes/") || p_option.begins_with("skins/"))) {
+	if (animation_importer && (p_option == "nodes/root_type" || p_option == "nodes/root_name" || p_option.begins_with("meshes/") || p_option.begins_with("skins/"))) {
 		return false; // Nothing to do here for animations.
 	}
 
@@ -326,8 +326,8 @@ void ResourceImporterScene::_pre_fix_global(Node *p_scene, const HashMap<StringN
 		Ref<Animation> reset_anim;
 		for (int i = 0; i < anim_players.size(); i++) {
 			AnimationPlayer *player = cast_to<AnimationPlayer>(anim_players[i]);
-			if (player->has_animation(SNAME("RESET"))) {
-				reset_anim = player->get_animation(SNAME("RESET"));
+			if (player->has_animation(SceneStringName(RESET))) {
+				reset_anim = player->get_animation(SceneStringName(RESET));
 				break;
 			}
 		}
@@ -341,7 +341,7 @@ void ResourceImporterScene::_pre_fix_global(Node *p_scene, const HashMap<StringN
 				anim_library.instantiate();
 				anim_player->add_animation_library(StringName(), anim_library);
 			}
-			anim_library->add_animation(SNAME("RESET"), reset_anim);
+			anim_library->add_animation(SceneStringName(RESET), reset_anim);
 		}
 		TypedArray<Node> skeletons = p_scene->find_children("*", "Skeleton3D");
 		for (int i = 0; i < skeletons.size(); i++) {
@@ -387,7 +387,7 @@ static bool _teststr(const String &p_what, const String &p_str) {
 		what = what.substr(0, what.length() - 1);
 	}
 
-	if (what.findn("$" + p_str) != -1) { //blender and other stuff
+	if (what.containsn("$" + p_str)) { // Blender and other stuff.
 		return true;
 	}
 	if (what.to_lower().ends_with("-" + p_str)) { //collada only supports "_" and "-" besides letters
@@ -410,7 +410,7 @@ static String _fixstr(const String &p_what, const String &p_str) {
 
 	String end = p_what.substr(what.length(), p_what.length() - what.length());
 
-	if (what.findn("$" + p_str) != -1) { //blender and other stuff
+	if (what.containsn("$" + p_str)) { // Blender and other stuff.
 		return what.replace("$" + p_str, "") + end;
 	}
 	if (what.to_lower().ends_with("-" + p_str)) { //collada only supports "_" and "-" besides letters
@@ -1046,10 +1046,10 @@ Node *ResourceImporterScene::_pre_fix_animations(Node *p_node, Node *p_root, con
 	return p_node;
 }
 
-Node *ResourceImporterScene::_post_fix_animations(Node *p_node, Node *p_root, const Dictionary &p_node_data, const Dictionary &p_animation_data, float p_animation_fps) {
+Node *ResourceImporterScene::_post_fix_animations(Node *p_node, Node *p_root, const Dictionary &p_node_data, const Dictionary &p_animation_data, float p_animation_fps, bool p_remove_immutable_tracks) {
 	// children first
 	for (int i = 0; i < p_node->get_child_count(); i++) {
-		Node *r = _post_fix_animations(p_node->get_child(i), p_root, p_node_data, p_animation_data, p_animation_fps);
+		Node *r = _post_fix_animations(p_node->get_child(i), p_root, p_node_data, p_animation_data, p_animation_fps, p_remove_immutable_tracks);
 		if (!r) {
 			i--; //was erased
 		}
@@ -1077,6 +1077,164 @@ Node *ResourceImporterScene::_post_fix_animations(Node *p_node, Node *p_root, co
 
 	if (Object::cast_to<AnimationPlayer>(p_node)) {
 		AnimationPlayer *ap = Object::cast_to<AnimationPlayer>(p_node);
+		List<StringName> anims;
+		ap->get_animation_list(&anims);
+
+		if (p_remove_immutable_tracks) {
+			AnimationImportTracks import_tracks_mode[TRACK_CHANNEL_MAX] = {
+				AnimationImportTracks(int(node_settings["import_tracks/position"])),
+				AnimationImportTracks(int(node_settings["import_tracks/rotation"])),
+				AnimationImportTracks(int(node_settings["import_tracks/scale"]))
+			};
+			HashMap<NodePath, bool> used_tracks[TRACK_CHANNEL_MAX];
+
+			for (const StringName &name : anims) {
+				Ref<Animation> anim = ap->get_animation(name);
+				int track_count = anim->get_track_count();
+				LocalVector<int> tracks_to_keep;
+				for (int track_i = 0; track_i < track_count; track_i++) {
+					tracks_to_keep.push_back(track_i);
+					int track_channel_type = 0;
+					switch (anim->track_get_type(track_i)) {
+						case Animation::TYPE_POSITION_3D:
+							track_channel_type = TRACK_CHANNEL_POSITION;
+							break;
+						case Animation::TYPE_ROTATION_3D:
+							track_channel_type = TRACK_CHANNEL_ROTATION;
+							break;
+						case Animation::TYPE_SCALE_3D:
+							track_channel_type = TRACK_CHANNEL_SCALE;
+							break;
+						default:
+							continue;
+					}
+					AnimationImportTracks track_mode = import_tracks_mode[track_channel_type];
+					NodePath path = anim->track_get_path(track_i);
+					Node *n = p_root->get_node(path);
+					Node3D *n3d = Object::cast_to<Node3D>(n);
+					Skeleton3D *skel = Object::cast_to<Skeleton3D>(n);
+					bool keep_track = false;
+					Vector3 loc;
+					Quaternion rot;
+					Vector3 scale;
+					if (skel && path.get_subname_count() > 0) {
+						StringName bone = path.get_subname(0);
+						int bone_idx = skel->find_bone(bone);
+						if (bone_idx == -1) {
+							continue;
+						}
+						// Note that this is using get_bone_pose to update the bone pose cache.
+						Transform3D bone_rest = skel->get_bone_rest(bone_idx);
+						loc = bone_rest.origin / skel->get_motion_scale();
+						rot = bone_rest.basis.get_rotation_quaternion();
+						scale = bone_rest.basis.get_scale();
+					} else if (n3d) {
+						loc = n3d->get_position();
+						rot = n3d->get_transform().basis.get_rotation_quaternion();
+						scale = n3d->get_scale();
+					} else {
+						continue;
+					}
+
+					if (track_mode == ANIMATION_IMPORT_TRACKS_IF_PRESENT_FOR_ALL) {
+						if (used_tracks[track_channel_type].has(path)) {
+							if (used_tracks[track_channel_type][path]) {
+								continue;
+							}
+						} else {
+							used_tracks[track_channel_type].insert(path, false);
+						}
+					}
+
+					for (int key_i = 0; key_i < anim->track_get_key_count(track_i) && !keep_track; key_i++) {
+						switch (track_channel_type) {
+							case TRACK_CHANNEL_POSITION: {
+								Vector3 key_pos;
+								anim->position_track_get_key(track_i, key_i, &key_pos);
+								if (!key_pos.is_equal_approx(loc)) {
+									keep_track = true;
+									if (track_mode == ANIMATION_IMPORT_TRACKS_IF_PRESENT_FOR_ALL) {
+										used_tracks[track_channel_type][path] = true;
+									}
+								}
+							} break;
+							case TRACK_CHANNEL_ROTATION: {
+								Quaternion key_rot;
+								anim->rotation_track_get_key(track_i, key_i, &key_rot);
+								if (!key_rot.is_equal_approx(rot)) {
+									keep_track = true;
+									if (track_mode == ANIMATION_IMPORT_TRACKS_IF_PRESENT_FOR_ALL) {
+										used_tracks[track_channel_type][path] = true;
+									}
+								}
+							} break;
+							case TRACK_CHANNEL_SCALE: {
+								Vector3 key_scl;
+								anim->scale_track_get_key(track_i, key_i, &key_scl);
+								if (!key_scl.is_equal_approx(scale)) {
+									keep_track = true;
+									if (track_mode == ANIMATION_IMPORT_TRACKS_IF_PRESENT_FOR_ALL) {
+										used_tracks[track_channel_type][path] = true;
+									}
+								}
+							} break;
+							default:
+								break;
+						}
+					}
+					if (track_mode != ANIMATION_IMPORT_TRACKS_IF_PRESENT_FOR_ALL && !keep_track) {
+						tracks_to_keep.remove_at(tracks_to_keep.size() - 1);
+					}
+				}
+				for (int dst_track_i = 0; dst_track_i < (int)tracks_to_keep.size(); dst_track_i++) {
+					int src_track_i = tracks_to_keep[dst_track_i];
+					if (src_track_i != dst_track_i) {
+						anim->track_swap(src_track_i, dst_track_i);
+					}
+				}
+				for (int track_i = track_count - 1; track_i >= (int)tracks_to_keep.size(); track_i--) {
+					anim->remove_track(track_i);
+				}
+			}
+			for (const StringName &name : anims) {
+				Ref<Animation> anim = ap->get_animation(name);
+				int track_count = anim->get_track_count();
+				LocalVector<int> tracks_to_keep;
+				for (int track_i = 0; track_i < track_count; track_i++) {
+					tracks_to_keep.push_back(track_i);
+					int track_channel_type = 0;
+					switch (anim->track_get_type(track_i)) {
+						case Animation::TYPE_POSITION_3D:
+							track_channel_type = TRACK_CHANNEL_POSITION;
+							break;
+						case Animation::TYPE_ROTATION_3D:
+							track_channel_type = TRACK_CHANNEL_ROTATION;
+							break;
+						case Animation::TYPE_SCALE_3D:
+							track_channel_type = TRACK_CHANNEL_SCALE;
+							break;
+						default:
+							continue;
+					}
+					AnimationImportTracks track_mode = import_tracks_mode[track_channel_type];
+					if (track_mode == ANIMATION_IMPORT_TRACKS_IF_PRESENT_FOR_ALL) {
+						NodePath path = anim->track_get_path(track_i);
+						if (used_tracks[track_channel_type].has(path) && !used_tracks[track_channel_type][path]) {
+							tracks_to_keep.remove_at(tracks_to_keep.size() - 1);
+						}
+					}
+				}
+				for (int dst_track_i = 0; dst_track_i < (int)tracks_to_keep.size(); dst_track_i++) {
+					int src_track_i = tracks_to_keep[dst_track_i];
+					if (src_track_i != dst_track_i) {
+						anim->track_swap(src_track_i, dst_track_i);
+					}
+				}
+				for (int track_i = track_count - 1; track_i >= (int)tracks_to_keep.size(); track_i--) {
+					anim->remove_track(track_i);
+				}
+			}
+		}
 
 		bool use_optimizer = node_settings["optimizer/enabled"];
 		float anim_optimizer_linerr = node_settings["optimizer/max_velocity_error"];
@@ -1094,8 +1252,6 @@ Node *ResourceImporterScene::_post_fix_animations(Node *p_node, Node *p_root, co
 			_compress_animations(ap, anim_compression_page_size);
 		}
 
-		List<StringName> anims;
-		ap->get_animation_list(&anims);
 		for (const StringName &name : anims) {
 			Ref<Animation> anim = ap->get_animation(name);
 			Array animation_slices;
@@ -1236,7 +1392,7 @@ Node *ResourceImporterScene::_post_fix_node(Node *p_node, Node *p_root, HashMap<
 					List<StringName> anim_list;
 					anim_player->get_animation_list(&anim_list);
 					if (anim_list.size() == 1) {
-						selected_animation_name = anim_list[0];
+						selected_animation_name = anim_list.front()->get();
 					}
 					rest_animation = anim_player->get_animation(selected_animation_name);
 					if (rest_animation.is_valid()) {
@@ -1252,7 +1408,7 @@ Node *ResourceImporterScene::_post_fix_node(Node *p_node, Node *p_root, HashMap<
 						List<StringName> anim_list;
 						library->get_animation_list(&anim_list);
 						if (anim_list.size() == 1) {
-							selected_animation_name = String(anim_list[0]);
+							selected_animation_name = String(anim_list.front()->get());
 						}
 						rest_animation = library->get_animation(selected_animation_name);
 					}
@@ -1752,6 +1908,7 @@ void ResourceImporterScene::_create_slices(AnimationPlayer *ap, Ref<Animation> a
 
 		new_anim->set_loop_mode(loop_mode);
 		new_anim->set_length(to - from);
+		new_anim->set_step(anim->get_step());
 
 		al->add_animation(name, new_anim);
 
@@ -1792,7 +1949,7 @@ void ResourceImporterScene::get_internal_import_options(InternalImportCategory p
 			r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "generate/physics", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), false));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "generate/navmesh", PROPERTY_HINT_ENUM, "Disabled,Mesh + NavMesh,NavMesh Only"), 0));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "physics/body_type", PROPERTY_HINT_ENUM, "Static,Dynamic,Area"), 0));
-			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "physics/shape_type", PROPERTY_HINT_ENUM, "Decompose Convex,Simple Convex,Trimesh,Box,Sphere,Cylinder,Capsule", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), 0));
+			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "physics/shape_type", PROPERTY_HINT_ENUM, "Decompose Convex,Simple Convex,Trimesh,Box,Sphere,Cylinder,Capsule", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), 2));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::OBJECT, "physics/physics_material_override", PROPERTY_HINT_RESOURCE_TYPE, "PhysicsMaterial"), Variant()));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "physics/layer", PROPERTY_HINT_LAYERS_3D_PHYSICS), 1));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "physics/mask", PROPERTY_HINT_LAYERS_3D_PHYSICS), 1));
@@ -1837,7 +1994,6 @@ void ResourceImporterScene::get_internal_import_options(InternalImportCategory p
 		case INTERNAL_IMPORT_CATEGORY_MESH: {
 			r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "save_to_file/enabled", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_DEFAULT | PROPERTY_USAGE_UPDATE_ALL_IF_MODIFIED), false));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "save_to_file/path", PROPERTY_HINT_SAVE_FILE, "*.res,*.tres"), ""));
-			r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "save_to_file/make_streamable"), ""));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "generate/shadow_meshes", PROPERTY_HINT_ENUM, "Default,Enable,Disable"), 0));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "generate/lightmap_uv", PROPERTY_HINT_ENUM, "Default,Enable,Disable"), 0));
 			r_options->push_back(ImportOption(PropertyInfo(Variant::INT, "generate/lods", PROPERTY_HINT_ENUM, "Default,Enable,Disable"), 0));
@@ -1930,12 +2086,12 @@ bool ResourceImporterScene::get_internal_option_visibility(InternalImportCategor
 					p_options.has("generate/physics") &&
 					p_options["generate/physics"].operator bool();
 
-			if (p_option.find("physics/") >= 0) {
+			if (p_option.contains("physics/")) {
 				// Show if need to generate collisions.
 				return generate_physics;
 			}
 
-			if (p_option.find("decomposition/") >= 0) {
+			if (p_option.contains("decomposition/")) {
 				// Show if need to generate collisions.
 				if (generate_physics &&
 						// Show if convex is enabled.
@@ -1991,7 +2147,7 @@ bool ResourceImporterScene::get_internal_option_visibility(InternalImportCategor
 			}
 		} break;
 		case INTERNAL_IMPORT_CATEGORY_MESH: {
-			if (p_option == "save_to_file/path" || p_option == "save_to_file/make_streamable") {
+			if (p_option == "save_to_file/path") {
 				return p_options["save_to_file/enabled"];
 			}
 		} break;
@@ -2047,7 +2203,7 @@ bool ResourceImporterScene::get_internal_option_visibility(InternalImportCategor
 						List<StringName> anim_list;
 						library->get_animation_list(&anim_list);
 						if (anim_list.size() == 1) {
-							selected_animation_name = String(anim_list[0]);
+							selected_animation_name = String(anim_list.front()->get());
 						}
 						if (library->has_animation(selected_animation_name)) {
 							anim = library->get_animation(selected_animation_name);
@@ -2129,8 +2285,8 @@ bool ResourceImporterScene::get_internal_option_update_view_required(InternalImp
 			if (
 					p_option == "generate/physics" ||
 					p_option == "physics/shape_type" ||
-					p_option.find("decomposition/") >= 0 ||
-					p_option.find("primitive/") >= 0) {
+					p_option.contains("decomposition/") ||
+					p_option.contains("primitive/")) {
 				return true;
 			}
 		} break;
@@ -2173,6 +2329,7 @@ void ResourceImporterScene::get_import_options(const String &p_path, List<Import
 		}
 		script_ext_hint += "*." + E;
 	}
+	bool trimming_defaults_on = p_path.get_extension().to_lower() == "fbx";
 
 	r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "nodes/apply_root_scale"), true));
 	r_options->push_back(ImportOption(PropertyInfo(Variant::FLOAT, "nodes/root_scale", PROPERTY_HINT_RANGE, "0.001,1000,0.001"), 1.0));
@@ -2186,7 +2343,7 @@ void ResourceImporterScene::get_import_options(const String &p_path, List<Import
 	r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "skins/use_named_skins"), true));
 	r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "animation/import"), true));
 	r_options->push_back(ImportOption(PropertyInfo(Variant::FLOAT, "animation/fps", PROPERTY_HINT_RANGE, "1,120,1"), 30));
-	r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "animation/trimming"), false));
+	r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "animation/trimming"), trimming_defaults_on));
 	r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "animation/remove_immutable_tracks"), true));
 	r_options->push_back(ImportOption(PropertyInfo(Variant::BOOL, "animation/import_rest_as_RESET"), false));
 	r_options->push_back(ImportOption(PropertyInfo(Variant::STRING, "import_script/path", PROPERTY_HINT_FILE, script_ext_hint), ""));
@@ -2784,9 +2941,10 @@ Error ResourceImporterScene::import(const String &p_source_file, const String &p
 	if (p_options.has(SNAME("animation/fps"))) {
 		fps = (float)p_options[SNAME("animation/fps")];
 	}
+	bool remove_immutable_tracks = p_options.has("animation/remove_immutable_tracks") ? (bool)p_options["animation/remove_immutable_tracks"] : true;
 	_pre_fix_animations(scene, scene, node_data, animation_data, fps);
 	_post_fix_node(scene, scene, collision_map, occluder_arrays, scanned_meshes, node_data, material_data, animation_data, fps, apply_root ? root_scale : 1.0);
-	_post_fix_animations(scene, scene, node_data, animation_data, fps);
+	_post_fix_animations(scene, scene, node_data, animation_data, fps, remove_immutable_tracks);
 
 	String root_type = p_options["nodes/root_type"];
 	if (!root_type.is_empty()) {

@@ -358,7 +358,6 @@ void DisplayServerMacOS::_dispatch_input_events(const Ref<InputEvent> &p_event) 
 }
 
 void DisplayServerMacOS::_dispatch_input_event(const Ref<InputEvent> &p_event) {
-	_THREAD_SAFE_METHOD_
 	if (!in_dispatch_input_event) {
 		in_dispatch_input_event = true;
 
@@ -939,7 +938,7 @@ Error DisplayServerMacOS::dialog_show(String p_title, String p_description, Vect
 		button_pressed = int64_t(2 + (ret - NSAlertThirdButtonReturn));
 	}
 
-	if (!p_callback.is_null()) {
+	if (p_callback.is_valid()) {
 		Variant ret;
 		Callable::CallError ce;
 		const Variant *args[1] = { &button_pressed };
@@ -1019,7 +1018,7 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 							  String url;
 							  url.parse_utf8([[[panel URL] path] UTF8String]);
 							  files.push_back(url);
-							  if (!callback.is_null()) {
+							  if (callback.is_valid()) {
 								  if (p_options_in_cb) {
 									  Variant v_result = true;
 									  Variant v_files = files;
@@ -1048,7 +1047,7 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 								  }
 							  }
 						  } else {
-							  if (!callback.is_null()) {
+							  if (callback.is_valid()) {
 								  if (p_options_in_cb) {
 									  Variant v_result = false;
 									  Variant v_files = Vector<String>();
@@ -1135,7 +1134,7 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 								  url.parse_utf8([[[urls objectAtIndex:i] path] UTF8String]);
 								  files.push_back(url);
 							  }
-							  if (!callback.is_null()) {
+							  if (callback.is_valid()) {
 								  if (p_options_in_cb) {
 									  Variant v_result = true;
 									  Variant v_files = files;
@@ -1164,7 +1163,7 @@ Error DisplayServerMacOS::_file_dialog_with_options_show(const String &p_title, 
 								  }
 							  }
 						  } else {
-							  if (!callback.is_null()) {
+							  if (callback.is_valid()) {
 								  if (p_options_in_cb) {
 									  Variant v_result = false;
 									  Variant v_files = Vector<String>();
@@ -1223,7 +1222,7 @@ Error DisplayServerMacOS::dialog_input_text(String p_title, String p_description
 	String ret;
 	ret.parse_utf8([[input stringValue] UTF8String]);
 
-	if (!p_callback.is_null()) {
+	if (p_callback.is_valid()) {
 		Variant v_result = ret;
 		Variant ret;
 		Callable::CallError ce;
@@ -1995,7 +1994,7 @@ void DisplayServerMacOS::window_set_position(const Point2i &p_position, WindowID
 	ERR_FAIL_COND(!windows.has(p_window));
 	WindowData &wd = windows[p_window];
 
-	if (NSEqualRects([wd.window_object frame], [[wd.window_object screen] visibleFrame])) {
+	if (wd.fullscreen) {
 		return;
 	}
 
@@ -2084,12 +2083,21 @@ Size2i DisplayServerMacOS::window_get_max_size(WindowID p_window) const {
 }
 
 void DisplayServerMacOS::update_presentation_mode() {
+	bool has_fs_windows = false;
 	for (const KeyValue<WindowID, WindowData> &wd : windows) {
-		if (wd.value.fullscreen && wd.value.exclusive_fullscreen) {
-			return;
+		if (wd.value.fullscreen) {
+			if (wd.value.exclusive_fullscreen) {
+				return;
+			} else {
+				has_fs_windows = true;
+			}
 		}
 	}
-	[NSApp setPresentationOptions:NSApplicationPresentationDefault];
+	if (has_fs_windows) {
+		[NSApp setPresentationOptions:NSApplicationPresentationAutoHideMenuBar | NSApplicationPresentationAutoHideDock | NSApplicationPresentationFullScreen];
+	} else {
+		[NSApp setPresentationOptions:NSApplicationPresentationDefault];
+	}
 }
 
 void DisplayServerMacOS::window_set_min_size(const Size2i p_size, WindowID p_window) {
@@ -2313,7 +2321,7 @@ void DisplayServerMacOS::window_set_window_buttons_offset(const Vector2i &p_offs
 	WindowData &wd = windows[p_window];
 	float scale = screen_get_max_scale();
 	wd.wb_offset = p_offset / scale;
-	wd.wb_offset = wd.wb_offset.max(Vector2i(12, 12));
+	wd.wb_offset = wd.wb_offset.maxi(12);
 	if (wd.window_button_view) {
 		[wd.window_button_view setOffset:NSMakePoint(wd.wb_offset.x, wd.wb_offset.y)];
 	}
@@ -2977,7 +2985,7 @@ Key DisplayServerMacOS::keyboard_get_label_from_physical(Key p_keycode) const {
 }
 
 void DisplayServerMacOS::process_events() {
-	_THREAD_SAFE_METHOD_
+	ERR_FAIL_COND(!Thread::is_main_thread());
 
 	while (true) {
 		NSEvent *event = [NSApp
@@ -3013,6 +3021,8 @@ void DisplayServerMacOS::process_events() {
 		Input::get_singleton()->flush_buffered_events();
 	}
 
+	_THREAD_SAFE_LOCK_
+
 	for (KeyValue<WindowID, WindowData> &E : windows) {
 		WindowData &wd = E.value;
 		if (wd.mpass) {
@@ -3036,10 +3046,12 @@ void DisplayServerMacOS::process_events() {
 			}
 		}
 	}
+
+	_THREAD_SAFE_UNLOCK_
 }
 
 void DisplayServerMacOS::force_process_and_drop_events() {
-	_THREAD_SAFE_METHOD_
+	ERR_FAIL_COND(!Thread::is_main_thread());
 
 	drop_events = true;
 	process_events();
@@ -3047,9 +3059,14 @@ void DisplayServerMacOS::force_process_and_drop_events() {
 }
 
 void DisplayServerMacOS::release_rendering_thread() {
-}
-
-void DisplayServerMacOS::make_rendering_thread() {
+#if defined(GLES3_ENABLED)
+	if (gl_manager_angle) {
+		gl_manager_angle->release_current();
+	}
+	if (gl_manager_legacy) {
+		gl_manager_legacy->release_current();
+	}
+#endif
 }
 
 void DisplayServerMacOS::swap_buffers() {
@@ -3134,10 +3151,11 @@ void DisplayServerMacOS::set_icon(const Ref<Image> &p_icon) {
 	}
 }
 
-DisplayServer::IndicatorID DisplayServerMacOS::create_status_indicator(const Ref<Image> &p_icon, const String &p_tooltip, const Callable &p_callback) {
+DisplayServer::IndicatorID DisplayServerMacOS::create_status_indicator(const Ref<Texture2D> &p_icon, const String &p_tooltip, const Callable &p_callback) {
 	NSImage *nsimg = nullptr;
 	if (p_icon.is_valid() && p_icon->get_width() > 0 && p_icon->get_height() > 0) {
-		Ref<Image> img = p_icon->duplicate();
+		Ref<Image> img = p_icon->get_image();
+		img = img->duplicate();
 		img->convert(Image::FORMAT_RGBA8);
 
 		NSBitmapImageRep *imgrep = [[NSBitmapImageRep alloc]
@@ -3175,13 +3193,18 @@ DisplayServer::IndicatorID DisplayServerMacOS::create_status_indicator(const Ref
 
 	IndicatorData idat;
 
-	idat.item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
-	idat.view = [[GodotStatusItemView alloc] init];
+	NSStatusItem *item = [[NSStatusBar systemStatusBar] statusItemWithLength:NSSquareStatusItemLength];
+	idat.item = item;
+	idat.delegate = [[GodotStatusItemDelegate alloc] init];
+	[idat.delegate setCallback:p_callback];
 
-	[idat.view setToolTip:[NSString stringWithUTF8String:p_tooltip.utf8().get_data()]];
-	[idat.view setImage:nsimg];
-	[idat.view setCallback:p_callback];
-	[idat.item setView:idat.view];
+	item.button.image = nsimg;
+	item.button.imagePosition = NSImageOnly;
+	item.button.imageScaling = NSImageScaleProportionallyUpOrDown;
+	item.button.target = idat.delegate;
+	item.button.action = @selector(click:);
+	[item.button sendActionOn:(NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown)];
+	item.button.toolTip = [NSString stringWithUTF8String:p_tooltip.utf8().get_data()];
 
 	IndicatorID iid = indicator_id_counter++;
 	indicators[iid] = idat;
@@ -3189,12 +3212,13 @@ DisplayServer::IndicatorID DisplayServerMacOS::create_status_indicator(const Ref
 	return iid;
 }
 
-void DisplayServerMacOS::status_indicator_set_icon(IndicatorID p_id, const Ref<Image> &p_icon) {
+void DisplayServerMacOS::status_indicator_set_icon(IndicatorID p_id, const Ref<Texture2D> &p_icon) {
 	ERR_FAIL_COND(!indicators.has(p_id));
 
 	NSImage *nsimg = nullptr;
 	if (p_icon.is_valid() && p_icon->get_width() > 0 && p_icon->get_height() > 0) {
-		Ref<Image> img = p_icon->duplicate();
+		Ref<Image> img = p_icon->get_image();
+		img = img->duplicate();
 		img->convert(Image::FORMAT_RGBA8);
 
 		NSBitmapImageRep *imgrep = [[NSBitmapImageRep alloc]
@@ -3230,19 +3254,57 @@ void DisplayServerMacOS::status_indicator_set_icon(IndicatorID p_id, const Ref<I
 		}
 	}
 
-	[indicators[p_id].view setImage:nsimg];
+	NSStatusItem *item = indicators[p_id].item;
+	item.button.image = nsimg;
 }
 
 void DisplayServerMacOS::status_indicator_set_tooltip(IndicatorID p_id, const String &p_tooltip) {
 	ERR_FAIL_COND(!indicators.has(p_id));
 
-	[indicators[p_id].view setToolTip:[NSString stringWithUTF8String:p_tooltip.utf8().get_data()]];
+	NSStatusItem *item = indicators[p_id].item;
+	item.button.toolTip = [NSString stringWithUTF8String:p_tooltip.utf8().get_data()];
+}
+
+void DisplayServerMacOS::status_indicator_set_menu(IndicatorID p_id, const RID &p_menu_rid) {
+	ERR_FAIL_COND(!indicators.has(p_id));
+
+	NSStatusItem *item = indicators[p_id].item;
+	if (p_menu_rid.is_valid() && native_menu->has_menu(p_menu_rid)) {
+		NSMenu *menu = native_menu->get_native_menu_handle(p_menu_rid);
+		item.menu = menu;
+	} else {
+		item.menu = nullptr;
+	}
 }
 
 void DisplayServerMacOS::status_indicator_set_callback(IndicatorID p_id, const Callable &p_callback) {
 	ERR_FAIL_COND(!indicators.has(p_id));
 
-	[indicators[p_id].view setCallback:p_callback];
+	[indicators[p_id].delegate setCallback:p_callback];
+}
+
+Rect2 DisplayServerMacOS::status_indicator_get_rect(IndicatorID p_id) const {
+	ERR_FAIL_COND_V(!indicators.has(p_id), Rect2());
+
+	NSStatusItem *item = indicators[p_id].item;
+	NSView *v = item.button;
+	const NSRect contentRect = [v frame];
+	const NSRect nsrect = [v.window convertRectToScreen:contentRect];
+	Rect2 rect;
+
+	// Return the position of the top-left corner, for macOS the y starts at the bottom.
+	const float scale = screen_get_max_scale();
+	rect.size.x = nsrect.size.width;
+	rect.size.y = nsrect.size.height;
+	rect.size *= scale;
+	rect.position.x = nsrect.origin.x;
+	rect.position.y = (nsrect.origin.y + nsrect.size.height);
+	rect.position *= scale;
+	rect.position -= _get_screens_origin();
+	// macOS native y-coordinate relative to _get_screens_origin() is negative,
+	// Godot expects a positive value.
+	rect.position.y *= -1;
+	return rect;
 }
 
 void DisplayServerMacOS::delete_status_indicator(IndicatorID p_id) {
@@ -3252,8 +3314,8 @@ void DisplayServerMacOS::delete_status_indicator(IndicatorID p_id) {
 	indicators.erase(p_id);
 }
 
-DisplayServer *DisplayServerMacOS::create_func(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error) {
-	DisplayServer *ds = memnew(DisplayServerMacOS(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, r_error));
+DisplayServer *DisplayServerMacOS::create_func(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Context p_context, Error &r_error) {
+	DisplayServer *ds = memnew(DisplayServerMacOS(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, p_context, r_error));
 	if (r_error != OK) {
 		if (p_rendering_driver == "vulkan") {
 			String executable_command;
@@ -3438,7 +3500,7 @@ bool DisplayServerMacOS::mouse_process_popups(bool p_close) {
 	return closed;
 }
 
-DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Error &r_error) {
+DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, WindowMode p_mode, VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, Context p_context, Error &r_error) {
 	KeyMappingMacOS::initialize();
 
 	Input::get_singleton()->set_event_dispatch_function(_dispatch_input_events);

@@ -37,6 +37,7 @@
 
 class Button;
 class EditorSpinSlider;
+class MarginContainer;
 
 class EditorPropertyArrayObject : public RefCounted {
 	GDCLASS(EditorPropertyArrayObject, RefCounted);
@@ -112,7 +113,7 @@ class EditorPropertyArray : public EditorProperty {
 	int page_index = 0;
 	int changing_type_index;
 	Button *edit = nullptr;
-	MarginContainer *container = nullptr;
+	PanelContainer *container = nullptr;
 	VBoxContainer *property_vbox = nullptr;
 	EditorSpinSlider *size_slider = nullptr;
 	Button *button_add_item = nullptr;
@@ -134,6 +135,8 @@ class EditorPropertyArray : public EditorProperty {
 	void _reorder_button_down(int p_index);
 	void _reorder_button_up();
 	void _create_new_property_slot();
+
+	Node *get_base_node();
 
 protected:
 	Ref<EditorPropertyArrayObject> object;
@@ -162,6 +165,7 @@ protected:
 public:
 	void setup(Variant::Type p_array_type, const String &p_hint_string = "");
 	virtual void update_property() override;
+	virtual bool is_colored(ColorationMode p_mode) override;
 	EditorPropertyArray();
 };
 
@@ -204,7 +208,7 @@ class EditorPropertyDictionary : public EditorProperty {
 	int page_index = 0;
 	int changing_type_index;
 	Button *edit = nullptr;
-	MarginContainer *container = nullptr;
+	PanelContainer *container = nullptr;
 	VBoxContainer *property_vbox = nullptr;
 	PanelContainer *add_panel = nullptr;
 	EditorSpinSlider *size_sliderv = nullptr;
@@ -230,6 +234,7 @@ protected:
 public:
 	void setup(PropertyHint p_hint);
 	virtual void update_property() override;
+	virtual bool is_colored(ColorationMode p_mode) override;
 	EditorPropertyDictionary();
 };
 

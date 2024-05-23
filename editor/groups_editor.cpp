@@ -32,6 +32,7 @@
 
 #include "editor/editor_node.h"
 #include "editor/editor_settings.h"
+#include "editor/editor_string_names.h"
 #include "editor/editor_undo_redo_manager.h"
 #include "editor/gui/editor_validation_panel.h"
 #include "editor/project_settings_editor.h"
@@ -157,10 +158,14 @@ void GroupsEditor::_update_groups() {
 
 	_load_scene_groups(scene_root_node);
 
-	for (const KeyValue<StringName, bool> &E : scene_groups) {
-		if (global_groups.has(E.key)) {
-			scene_groups.erase(E.key);
+	for (HashMap<StringName, bool>::Iterator E = scene_groups.begin(); E;) {
+		HashMap<StringName, bool>::Iterator next = E;
+		++next;
+
+		if (global_groups.has(E->key)) {
+			scene_groups.erase(E->key);
 		}
+		E = next;
 	}
 
 	updating_groups = false;
@@ -196,9 +201,9 @@ void GroupsEditor::_update_tree() {
 	TreeItem *root = tree->create_item();
 
 	TreeItem *local_root = tree->create_item(root);
-	local_root->set_text(0, "Scene Groups");
+	local_root->set_text(0, TTR("Scene Groups"));
 	local_root->set_icon(0, get_editor_theme_icon(SNAME("PackedScene")));
-	local_root->set_custom_bg_color(0, get_theme_color(SNAME("prop_subsection"), SNAME("Editor")));
+	local_root->set_custom_bg_color(0, get_theme_color(SNAME("prop_subsection"), EditorStringName(Editor)));
 	local_root->set_selectable(0, false);
 
 	List<StringName> scene_keys;
@@ -233,9 +238,9 @@ void GroupsEditor::_update_tree() {
 	keys.sort_custom<NoCaseComparator>();
 
 	TreeItem *global_root = tree->create_item(root);
-	global_root->set_text(0, "Global Groups");
+	global_root->set_text(0, TTR("Global Groups"));
 	global_root->set_icon(0, get_editor_theme_icon(SNAME("Environment")));
-	global_root->set_custom_bg_color(0, get_theme_color(SNAME("prop_subsection"), SNAME("Editor")));
+	global_root->set_custom_bg_color(0, get_theme_color(SNAME("prop_subsection"), EditorStringName(Editor)));
 	global_root->set_selectable(0, false);
 
 	for (const StringName &E : keys) {
@@ -831,7 +836,7 @@ GroupsEditor::GroupsEditor() {
 	add = memnew(Button);
 	add->set_flat(true);
 	add->set_tooltip_text(TTR("Add a new group."));
-	add->connect("pressed", callable_mp(this, &GroupsEditor::_show_add_group_dialog));
+	add->connect(SceneStringName(pressed), callable_mp(this, &GroupsEditor::_show_add_group_dialog));
 	hbc->add_child(add);
 
 	filter = memnew(LineEdit);
@@ -849,7 +854,7 @@ GroupsEditor::GroupsEditor() {
 	tree->set_select_mode(Tree::SelectMode::SELECT_SINGLE);
 	tree->connect("button_clicked", callable_mp(this, &GroupsEditor::_modify_group));
 	tree->connect("item_mouse_selected", callable_mp(this, &GroupsEditor::_item_mouse_selected));
-	tree->connect("gui_input", callable_mp(this, &GroupsEditor::_groups_gui_input));
+	tree->connect(SceneStringName(gui_input), callable_mp(this, &GroupsEditor::_groups_gui_input));
 	add_child(tree);
 
 	menu = memnew(PopupMenu);

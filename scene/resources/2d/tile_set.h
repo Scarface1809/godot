@@ -38,8 +38,8 @@
 #include "scene/2d/light_occluder_2d.h"
 #include "scene/main/canvas_item.h"
 #include "scene/resources/2d/convex_polygon_shape_2d.h"
+#include "scene/resources/2d/navigation_polygon.h"
 #include "scene/resources/image_texture.h"
-#include "scene/resources/navigation_polygon.h"
 #include "scene/resources/packed_scene.h"
 #include "scene/resources/physics_material.h"
 
@@ -618,6 +618,8 @@ public:
 		TRANSFORM_FLIP_V = 1 << 13,
 		TRANSFORM_TRANSPOSE = 1 << 14,
 	};
+
+	static const int16_t UNTRANSFORM_MASK = ~(TileSetAtlasSource::TRANSFORM_FLIP_H + TileSetAtlasSource::TRANSFORM_FLIP_V + TileSetAtlasSource::TRANSFORM_TRANSPOSE);
 
 private:
 	struct TileAlternativesData {
