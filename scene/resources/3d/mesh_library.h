@@ -37,30 +37,58 @@
 #include "scene/resources/mesh.h"
 #include "shape_3d.h"
 
+class Item : public Object {
+	GDCLASS(Item, Object);
+
+private:
+	const MeshLibrary *mesh_lib = nullptr;
+	struct ShapeData {
+		Ref<Shape3D> shape;
+		Transform3D local_transform;
+	};
+
+	String name;
+	Ref<Mesh> mesh;
+	Transform3D mesh_transform;
+	Vector<ShapeData> shapes;
+	Ref<Texture2D> preview;
+	Ref<NavigationMesh> navigation_mesh;
+	Transform3D navigation_mesh_transform;
+	uint32_t navigation_layers = 1;
+	// Custom data
+	Vector<Variant> custom_data;
+
+protected:
+	bool _set(const StringName &p_name, const Variant &p_value);
+	bool _get(const StringName &p_name, Variant &r_ret) const;
+	void _get_property_list(List<PropertyInfo> *p_list) const;
+	static void _bind_methods();
+
+public:
+	void set_name(const String &p_name);
+	void set_mesh(const Ref<Mesh> &p_mesh);
+	void set_mesh_transform(const Transform3D &p_transform);
+	void set_navigation_mesh(const Ref<NavigationMesh> &p_navigation_mesh);
+	void set_navigation_mesh_transform(const Transform3D &p_transform);
+	void set_navigation_layers(uint32_t p_navigation_layers);
+	void set_shapes(const Vector<ShapeData> &p_shapes);
+	void set_preview(const Ref<Texture2D> &p_preview);
+	String get_name() const;
+	Ref<Mesh> get_mesh() const;
+	Transform3D get_mesh_transform() const;
+	Ref<NavigationMesh> get_navigation_mesh() const;
+	Transform3D get_navigation_mesh_transform() const;
+	uint32_t get_navigation_layers() const;
+	Vector<ShapeData> get_shapes() const;
+	Ref<Texture2D> get_preview() const;
+};
+
 class MeshLibrary : public Resource {
 	GDCLASS(MeshLibrary, Resource);
 	RES_BASE_EXTENSION("meshlib");
 
 public:
-	struct ShapeData {
-		Ref<Shape3D> shape;
-		Transform3D local_transform;
-	};
-	struct Item {
-		String name;
-		Ref<Mesh> mesh;
-		Transform3D mesh_transform;
-		Vector<ShapeData> shapes;
-		Ref<Texture2D> preview;
-		Ref<NavigationMesh> navigation_mesh;
-		Transform3D navigation_mesh_transform;
-		uint32_t navigation_layers = 1;
-		// Custom data
-		Vector<Variant> custom_data;
-	};
-
 	RBMap<int, Item> item_map;
-
 	// CustomData
 	struct CustomDataLayer {
 		String name;

@@ -32,6 +32,50 @@
 
 #include "box_shape_3d.h"
 
+// ITEM
+
+void MeshLibrary::Item::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("get_name"), &MeshLibrary::Item::get_name);
+	ClassDB::bind_method(D_METHOD("set_name", "value"), &MeshLibrary::Item::set_name);
+	ADD_PROPERTY(PropertyInfo(Variant::STRING, "name"), "set_name", "get_name");
+
+	ClassDB::bind_method(D_METHOD("get_mesh"), &MeshLibrary::Item::get_mesh);
+	ClassDB::bind_method(D_METHOD("set_mesh", "value"), &MeshLibrary::Item::set_mesh);
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "mesh", PROPERTY_HINT_RESOURCE_TYPE, "Mesh"), "set_mesh", "get_mesh");
+
+	ClassDB::bind_method(D_METHOD("get_mesh_transform"), &MeshLibrary::Item::get_mesh_transform);
+	ClassDB::bind_method(D_METHOD("set_mesh_transform", "value"), &MeshLibrary::Item::set_mesh_transform);
+	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM3D, "mesh_transform"), "set_mesh_transform", "get_mesh_transform");
+
+	ClassDB::bind_method(D_METHOD("get_shapes"), &MeshLibrary::Item::get_shapes);
+	ClassDB::bind_method(D_METHOD("set_shapes", "value"), &MeshLibrary::Item::set_shapes);
+	ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "shapes"), "set_shapes", "get_shapes");
+
+	ClassDB::bind_method(D_METHOD("get_preview"), &MeshLibrary::Item::get_preview);
+	ClassDB::bind_method(D_METHOD("set_preview", "value"), &MeshLibrary::Item::set_preview);
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "preview", PROPERTY_HINT_RESOURCE_TYPE, "Texture2D"), "set_preview", "get_preview");
+
+	ClassDB::bind_method(D_METHOD("get_navigation_mesh"), &MeshLibrary::Item::get_navigation_mesh);
+	ClassDB::bind_method(D_METHOD("set_navigation_mesh", "value"), &MeshLibrary::Item::set_navigation_mesh);
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "navigation_mesh", PROPERTY_HINT_RESOURCE_TYPE, "NavigationMesh"), "set_navigation_mesh", "get_navigation_mesh");
+
+	ClassDB::bind_method(D_METHOD("get_navigation_mesh_transform"), &MeshLibrary::Item::get_navigation_mesh_transform);
+	ClassDB::bind_method(D_METHOD("set_navigation_mesh_transform", "value"), &MeshLibrary::Item::set_navigation_mesh_transform);
+	ADD_PROPERTY(PropertyInfo(Variant::TRANSFORM3D, "navigation_mesh_transforM"), "set_navigation_mesh_transform", "get_navigation_mesh_transform");
+
+	ClassDB::bind_method(D_METHOD("get_navigation_layers"), &MeshLibrary::Item::get_navigation_layers);
+	ClassDB::bind_method(D_METHOD("set_navigation_layers", "value"), &MeshLibrary::Item::set_navigation_layers);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "navigation_layers", PROPERTY_HINT_LAYERS_3D_NAVIGATION), "set_navigation_layers", "get_navigation_layers");
+
+	ClassDB::bind_method(D_METHOD("get_custom_data"), &MeshLibrary::Item::get_custom_data);
+	ClassDB::bind_method(D_METHOD("set_custom_data", "layer_name", "value"), &MeshLibrary::Item::set_custom_data);
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "custom_data", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_STORAGE), "set_custom_data", "get_custom_data");
+}
+
+// ITEM
+
+// MESH_LIBRARY
+
 bool MeshLibrary::_set(const StringName &p_name, const Variant &p_value) {
 	String prop_name = p_name;
 	if (prop_name.begins_with("item/")) {
@@ -519,3 +563,5 @@ MeshLibrary::MeshLibrary() {
 
 MeshLibrary::~MeshLibrary() {
 }
+
+// MESH_LIBRARY
