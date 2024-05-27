@@ -64,6 +64,7 @@ class MeshLibraryEditor : public Control {
 	void _menu_cbk(int p_option);
 	void _menu_remove_confirm();
 	void _menu_update_confirm(bool p_apply_xforms);
+	void _move_mesh_library_array_element(Object *p_undo_redo, Object *p_edited, const String &p_array_prefix, int p_from_index, int p_to_pos);
 
 	static void _import_scene(Node *p_scene, Ref<MeshLibrary> p_library, bool p_merge, bool p_apply_xforms);
 	static void _import_scene_parse_node(Ref<MeshLibrary> p_library, HashMap<int, MeshInstance3D *> &p_mesh_instances, Node *p_node, bool p_merge, bool p_apply_xforms);

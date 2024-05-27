@@ -37,58 +37,15 @@
 #include "scene/resources/mesh.h"
 #include "shape_3d.h"
 
-class Item : public Object {
-	GDCLASS(Item, Object);
-
-private:
-	const MeshLibrary *mesh_lib = nullptr;
-	struct ShapeData {
-		Ref<Shape3D> shape;
-		Transform3D local_transform;
-	};
-
-	String name;
-	Ref<Mesh> mesh;
-	Transform3D mesh_transform;
-	Vector<ShapeData> shapes;
-	Ref<Texture2D> preview;
-	Ref<NavigationMesh> navigation_mesh;
-	Transform3D navigation_mesh_transform;
-	uint32_t navigation_layers = 1;
-	// Custom data
-	Vector<Variant> custom_data;
-
-protected:
-	bool _set(const StringName &p_name, const Variant &p_value);
-	bool _get(const StringName &p_name, Variant &r_ret) const;
-	void _get_property_list(List<PropertyInfo> *p_list) const;
-	static void _bind_methods();
-
-public:
-	void set_name(const String &p_name);
-	void set_mesh(const Ref<Mesh> &p_mesh);
-	void set_mesh_transform(const Transform3D &p_transform);
-	void set_navigation_mesh(const Ref<NavigationMesh> &p_navigation_mesh);
-	void set_navigation_mesh_transform(const Transform3D &p_transform);
-	void set_navigation_layers(uint32_t p_navigation_layers);
-	void set_shapes(const Vector<ShapeData> &p_shapes);
-	void set_preview(const Ref<Texture2D> &p_preview);
-	String get_name() const;
-	Ref<Mesh> get_mesh() const;
-	Transform3D get_mesh_transform() const;
-	Ref<NavigationMesh> get_navigation_mesh() const;
-	Transform3D get_navigation_mesh_transform() const;
-	uint32_t get_navigation_layers() const;
-	Vector<ShapeData> get_shapes() const;
-	Ref<Texture2D> get_preview() const;
-};
+class MeshLibrary;
+class Item;
 
 class MeshLibrary : public Resource {
 	GDCLASS(MeshLibrary, Resource);
 	RES_BASE_EXTENSION("meshlib");
 
-public:
-	RBMap<int, Item> item_map;
+private:
+	RBMap<int, Item *> item_map;
 	// CustomData
 	struct CustomDataLayer {
 		String name;
@@ -97,6 +54,7 @@ public:
 	Vector<CustomDataLayer> custom_data_layers;
 	HashMap<String, int> custom_data_layers_by_name;
 
+public:
 	void _set_item_shapes(int p_item, const Array &p_shapes);
 	Array _get_item_shapes(int p_item) const;
 
@@ -110,30 +68,17 @@ protected:
 
 public:
 	void create_item(int p_item);
-	void set_item_name(int p_item, const String &p_name);
-	void set_item_mesh(int p_item, const Ref<Mesh> &p_mesh);
-	void set_item_mesh_transform(int p_item, const Transform3D &p_transform);
-	void set_item_navigation_mesh(int p_item, const Ref<NavigationMesh> &p_navigation_mesh);
-	void set_item_navigation_mesh_transform(int p_item, const Transform3D &p_transform);
-	void set_item_navigation_layers(int p_item, uint32_t p_navigation_layers);
-	void set_item_shapes(int p_item, const Vector<ShapeData> &p_shapes);
-	void set_item_preview(int p_item, const Ref<Texture2D> &p_preview);
-	String get_item_name(int p_item) const;
-	Ref<Mesh> get_item_mesh(int p_item) const;
-	Transform3D get_item_mesh_transform(int p_item) const;
-	Ref<NavigationMesh> get_item_navigation_mesh(int p_item) const;
-	Transform3D get_item_navigation_mesh_transform(int p_item) const;
-	uint32_t get_item_navigation_layers(int p_item) const;
-	Vector<ShapeData> get_item_shapes(int p_item) const;
-	Ref<Texture2D> get_item_preview(int p_item) const;
-
 	void remove_item(int p_item);
 	bool has_item(int p_item) const;
+
+	// Not useful for gd script only for source code purpose , maybe change later then
+	Item *get_item(int p_item) const;
 
 	void clear();
 
 	int find_item_by_name(const String &p_name) const;
 
+	int get_item_count() const;
 	Vector<int> get_item_list() const;
 	int get_last_unused_item_id() const;
 
@@ -148,16 +93,70 @@ public:
 	void set_custom_data_layer_type(int p_layer_id, Variant::Type p_value);
 	Variant::Type get_custom_data_layer_type(int p_layer_id) const;
 
-	// Custom data. Item specific
-	void set_custom_data(int p_item, String p_layer_name, Variant p_value);
-	Variant get_custom_data(int p_item, String p_layer_name) const;
-
-	// probbly private of the class item when refactored
-	void set_custom_data_by_layer_id(int p_item, int p_layer_id, Variant p_value);
-	Variant get_custom_data_by_layer_id(int p_item, int p_layer_id) const;
-
 	MeshLibrary();
 	~MeshLibrary();
+};
+
+class Item : public Object {
+	GDCLASS(Item, Object);
+
+public:
+	struct ShapeData {
+		Ref<Shape3D> shape;
+		Transform3D local_transform;
+	};
+
+private:
+	const MeshLibrary *mesh_lib = nullptr;
+
+	String name;
+	Ref<Mesh> mesh;
+	Transform3D mesh_transform;
+	Vector<Item::ShapeData> shapes;
+	Ref<Texture2D> preview;
+	Ref<NavigationMesh> navigation_mesh;
+	Transform3D navigation_mesh_transform;
+	uint32_t navigation_layers = 1;
+	// Custom data
+	Vector<Variant> custom_data;
+
+protected:
+	bool _set(const StringName &p_name, const Variant &p_value);
+	bool _get(const StringName &p_name, Variant &r_ret) const;
+	void _get_property_list(List<PropertyInfo> *p_list) const;
+	static void _bind_methods();
+
+public:
+	void set_mesh_library(const MeshLibrary *p_mesh_lib);
+	void notify_item_properties_should_change();
+
+	void add_custom_data_layer(int p_index);
+	void move_custom_data_layer(int p_from_index, int p_to_pos);
+	void remove_custom_data_layer(int p_index);
+
+	// Setters/Getters
+	void set_name(const String &p_name);
+	void set_mesh(const Ref<Mesh> &p_mesh);
+	void set_mesh_transform(const Transform3D &p_transform);
+	void set_navigation_mesh(const Ref<NavigationMesh> &p_navigation_mesh);
+	void set_navigation_mesh_transform(const Transform3D &p_transform);
+	void set_navigation_layers(uint32_t p_navigation_layers);
+	void set_shapes(const Vector<Item::ShapeData> &p_shapes);
+	void set_preview(const Ref<Texture2D> &p_preview);
+	String get_name() const;
+	Ref<Mesh> get_mesh() const;
+	Transform3D get_mesh_transform() const;
+	Ref<NavigationMesh> get_navigation_mesh() const;
+	Transform3D get_navigation_mesh_transform() const;
+	uint32_t get_navigation_layers() const;
+	Vector<Item::ShapeData> get_shapes() const;
+	Ref<Texture2D> get_preview() const;
+
+	// Custom data
+	void set_custom_data(String p_layer_name, Variant p_value);
+	Variant get_custom_data(String p_layer_name) const;
+	void set_custom_data_by_layer_id(int p_layer_id, Variant p_value);
+	Variant get_custom_data_by_layer_id(int p_layer_id) const;
 };
 
 #endif // MESH_LIBRARY_H

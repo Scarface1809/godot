@@ -609,19 +609,19 @@ bool GridMap::_octant_update(const OctantKey &p_key) {
 		xform.set_origin(cellpos * cell_size + ofs);
 		xform.basis.scale(Vector3(cell_scale, cell_scale, cell_scale));
 		if (baked_meshes.size() == 0) {
-			if (mesh_library->get_item_mesh(c.item).is_valid()) {
+			if (mesh_library->get_item(c.item)->get_mesh().is_valid()) {
 				if (!multimesh_items.has(c.item)) {
 					multimesh_items[c.item] = List<Pair<Transform3D, IndexKey>>();
 				}
 
 				Pair<Transform3D, IndexKey> p;
-				p.first = xform * mesh_library->get_item_mesh_transform(c.item);
+				p.first = xform * mesh_library->get_item(c.item)->get_mesh_transform();
 				p.second = E;
 				multimesh_items[c.item].push_back(p);
 			}
 		}
 
-		Vector<MeshLibrary::ShapeData> shapes = mesh_library->get_item_shapes(c.item);
+		Vector<Item::ShapeData> shapes = mesh_library->get_item(c.item)->get_shapes();
 		// add the item's shape at given xform to octant's static_body
 		for (int i = 0; i < shapes.size(); i++) {
 			// add the item's shape
@@ -635,11 +635,11 @@ bool GridMap::_octant_update(const OctantKey &p_key) {
 		}
 
 		// add the item's navigation_mesh at given xform to GridMap's Navigation ancestor
-		Ref<NavigationMesh> navigation_mesh = mesh_library->get_item_navigation_mesh(c.item);
+		Ref<NavigationMesh> navigation_mesh = mesh_library->get_item(c.item)->get_navigation_mesh();
 		if (navigation_mesh.is_valid()) {
 			Octant::NavigationCell nm;
-			nm.xform = xform * mesh_library->get_item_navigation_mesh_transform(c.item);
-			nm.navigation_layers = mesh_library->get_item_navigation_layers(c.item);
+			nm.xform = xform * mesh_library->get_item(c.item)->get_navigation_mesh_transform();
+			nm.navigation_layers = mesh_library->get_item(c.item)->get_navigation_layers();
 
 			if (bake_navigation) {
 				RID region = NavigationServer3D::get_singleton()->region_create();
@@ -689,7 +689,7 @@ bool GridMap::_octant_update(const OctantKey &p_key) {
 
 			RID mm = RS::get_singleton()->multimesh_create();
 			RS::get_singleton()->multimesh_allocate_data(mm, E.value.size(), RS::MULTIMESH_TRANSFORM_3D);
-			RS::get_singleton()->multimesh_set_mesh(mm, mesh_library->get_item_mesh(E.key)->get_rid());
+			RS::get_singleton()->multimesh_set_mesh(mm, mesh_library->get_item(E.key)->get_mesh()->get_rid());
 
 			int idx = 0;
 			for (const Pair<Transform3D, IndexKey> &F : E.value) {
@@ -778,7 +778,7 @@ void GridMap::_octant_enter_world(const OctantKey &p_key) {
 	if (bake_navigation && mesh_library.is_valid()) {
 		for (KeyValue<IndexKey, Octant::NavigationCell> &F : g.navigation_cell_ids) {
 			if (cell_map.has(F.key) && F.value.region.is_valid() == false) {
-				Ref<NavigationMesh> navigation_mesh = mesh_library->get_item_navigation_mesh(cell_map[F.key].item);
+				Ref<NavigationMesh> navigation_mesh = mesh_library->get_item(cell_map[F.key].item)->get_navigation_mesh();
 				if (navigation_mesh.is_valid()) {
 					RID region = NavigationServer3D::get_singleton()->region_create();
 					NavigationServer3D::get_singleton()->region_set_owner_id(region, get_instance_id());
@@ -1183,7 +1183,7 @@ Array GridMap::get_meshes() const {
 		if (!mesh_library->has_item(id)) {
 			continue;
 		}
-		Ref<Mesh> mesh = mesh_library->get_item_mesh(id);
+		Ref<Mesh> mesh = mesh_library->get_item(id)->get_mesh();
 		if (mesh.is_null()) {
 			continue;
 		}
@@ -1199,7 +1199,7 @@ Array GridMap::get_meshes() const {
 		xform.set_origin(cellpos * cell_size + ofs);
 		xform.basis.scale(Vector3(cell_scale, cell_scale, cell_scale));
 
-		meshes.push_back(xform * mesh_library->get_item_mesh_transform(id));
+		meshes.push_back(xform * mesh_library->get_item(id)->get_mesh_transform());
 		meshes.push_back(mesh);
 	}
 
@@ -1239,7 +1239,7 @@ void GridMap::make_baked_meshes(bool p_gen_lightmap_uv, float p_lightmap_uv_texe
 			continue;
 		}
 
-		Ref<Mesh> mesh = mesh_library->get_item_mesh(item);
+		Ref<Mesh> mesh = mesh_library->get_item(item)->get_mesh();
 		if (!mesh.is_valid()) {
 			continue;
 		}

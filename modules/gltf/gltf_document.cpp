@@ -5422,13 +5422,13 @@ void GLTFDocument::_convert_grid_map_to_gltf(GridMap *p_grid_map, GLTFNodeIndex 
 				Vector3(cell_location.x, cell_location.y, cell_location.z)));
 		Ref<GLTFMesh> gltf_mesh;
 		gltf_mesh.instantiate();
-		gltf_mesh->set_mesh(_mesh_to_importer_mesh(p_grid_map->get_mesh_library()->get_item_mesh(cell)));
-		gltf_mesh->set_original_name(p_grid_map->get_mesh_library()->get_item_name(cell));
+		gltf_mesh->set_mesh(_mesh_to_importer_mesh(p_grid_map->get_mesh_library()->get_item(cell)->get_mesh()));
+		gltf_mesh->set_original_name(p_grid_map->get_mesh_library()->get_item(cell)->get_name());
 		new_gltf_node->mesh = p_state->meshes.size();
 		p_state->meshes.push_back(gltf_mesh);
 		new_gltf_node->transform = cell_xform * p_grid_map->get_transform();
-		new_gltf_node->set_original_name(p_grid_map->get_mesh_library()->get_item_name(cell));
-		new_gltf_node->set_name(_gen_unique_name(p_state, p_grid_map->get_mesh_library()->get_item_name(cell)));
+		new_gltf_node->set_original_name(p_grid_map->get_mesh_library()->get_item(cell)->get_name());
+		new_gltf_node->set_name(_gen_unique_name(p_state, p_grid_map->get_mesh_library()->get_item(cell)->get_name()));
 	}
 }
 #endif // MODULE_GRIDMAP_ENABLED

@@ -248,7 +248,7 @@ void GridMapEditor::_update_cursor_transform() {
 
 	if (selected_palette >= 0) {
 		if (node && !node->get_mesh_library().is_null()) {
-			cursor_transform *= node->get_mesh_library()->get_item_mesh_transform(selected_palette);
+			cursor_transform *= node->get_mesh_library()->get_item(selected_palette)->get_mesh_transform();
 		}
 	}
 
@@ -524,7 +524,7 @@ void GridMapEditor::_set_clipboard_data() {
 					continue;
 				}
 
-				Ref<Mesh> mesh = meshLibrary->get_item_mesh(itm);
+				Ref<Mesh> mesh = meshLibrary->get_item(itm)->get_mesh();
 
 				ClipboardItem item;
 				item.cell_item = itm;
@@ -884,7 +884,7 @@ void GridMapEditor::update_palette() {
 	for (int i = 0; i < ids.size(); i++) {
 		_CGMEItemSort is;
 		is.id = ids[i];
-		is.name = mesh_library->get_item_name(ids[i]);
+		is.name = mesh_library->get_item(ids[i])->get_name();
 		il.push_back(is);
 	}
 	il.sort();
@@ -895,8 +895,8 @@ void GridMapEditor::update_palette() {
 
 	for (_CGMEItemSort &E : il) {
 		int id = E.id;
-		String name = mesh_library->get_item_name(id);
-		Ref<Texture2D> preview = mesh_library->get_item_preview(id);
+		String name = mesh_library->get_item(id)->get_name();
+		Ref<Texture2D> preview = mesh_library->get_item(id)->get_preview();
 
 		if (name.is_empty()) {
 			name = "#" + itos(id);
@@ -1148,7 +1148,7 @@ void GridMapEditor::_update_cursor_instance() {
 
 	if (selected_palette >= 0) {
 		if (node && !node->get_mesh_library().is_null()) {
-			Ref<Mesh> mesh = node->get_mesh_library()->get_item_mesh(selected_palette);
+			Ref<Mesh> mesh = node->get_mesh_library()->get_item(selected_palette)->get_mesh();
 			if (!mesh.is_null() && mesh->get_rid().is_valid()) {
 				cursor_instance = RenderingServer::get_singleton()->instance_create2(mesh->get_rid(), get_tree()->get_root()->get_world_3d()->get_scenario());
 				RenderingServer::get_singleton()->instance_set_transform(cursor_instance, cursor_transform);

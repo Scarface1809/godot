@@ -34,6 +34,7 @@
 #include "editor/editor_node.h"
 #include "editor/editor_settings.h"
 #include "editor/editor_string_names.h"
+#include "editor/editor_undo_redo_manager.h"
 #include "editor/gui/editor_file_dialog.h"
 #include "editor/inspector_dock.h"
 #include "editor/plugins/node_3d_editor_plugin.h"
@@ -90,7 +91,7 @@ void MeshLibraryEditor::_import_scene(Node *p_scene, Ref<MeshLibrary> p_library,
 		Vector<int> ids = p_library->get_item_list();
 		for (int i = 0; i < ids.size(); i++) {
 			if (mesh_instances.find(ids[i])) {
-				meshes.push_back(p_library->get_item_mesh(ids[i]));
+				meshes.push_back(p_library->get_item(ids[i])->get_mesh());
 				transforms.push_back(mesh_instances[ids[i]]->get_transform());
 			}
 		}
@@ -99,7 +100,7 @@ void MeshLibraryEditor::_import_scene(Node *p_scene, Ref<MeshLibrary> p_library,
 		int j = 0;
 		for (int i = 0; i < ids.size(); i++) {
 			if (mesh_instances.find(ids[i])) {
-				p_library->set_item_preview(ids[i], textures[j]);
+				p_library->get_item(ids[i])->set_preview(textures[j]);
 				j++;
 			}
 		}
@@ -141,7 +142,7 @@ void MeshLibraryEditor::_import_scene_parse_node(Ref<MeshLibrary> p_library, Has
 	if (item_id < 0) {
 		item_id = p_library->get_last_unused_item_id();
 		p_library->create_item(item_id);
-		p_library->set_item_name(item_id, mesh_instance_node->get_name());
+		p_library->get_item(item_id)->set_name(mesh_instance_node->get_name());
 	} else if (!p_merge) {
 		WARN_PRINT(vformat("MeshLibrary export found a MeshInstance3D with a duplicated name '%s' in the exported scene that overrides a previously parsed MeshInstance3D item with the same name.", mesh_instance_node->get_name()));
 	}
@@ -154,15 +155,15 @@ void MeshLibraryEditor::_import_scene_parse_node(Ref<MeshLibrary> p_library, Has
 			item_mesh->surface_set_material(i, surface_override_material);
 		}
 	}
-	p_library->set_item_mesh(item_id, item_mesh);
+	p_library->get_item(item_id)->set_mesh(item_mesh);
 
 	Transform3D item_mesh_transform;
 	if (p_apply_xforms) {
 		item_mesh_transform = mesh_instance_node->get_transform();
 	}
-	p_library->set_item_mesh_transform(item_id, item_mesh_transform);
+	p_library->get_item(item_id)->set_mesh_transform(item_mesh_transform);
 
-	Vector<MeshLibrary::ShapeData> collisions;
+	Vector<Item::ShapeData> collisions;
 	for (int i = 0; i < mesh_instance_node->get_child_count(); i++) {
 		StaticBody3D *static_body_node = Object::cast_to<StaticBody3D>(mesh_instance_node->get_child(i));
 		if (!static_body_node) {
@@ -184,14 +185,14 @@ void MeshLibraryEditor::_import_scene_parse_node(Ref<MeshLibrary> p_library, Has
 				if (!collision_shape.is_valid()) {
 					continue;
 				}
-				MeshLibrary::ShapeData shape_data;
+				Item::ShapeData shape_data;
 				shape_data.shape = collision_shape;
 				shape_data.local_transform = shape_transform;
 				collisions.push_back(shape_data);
 			}
 		}
 	}
-	p_library->set_item_shapes(item_id, collisions);
+	p_library->get_item(item_id)->set_shapes(collisions);
 
 	for (int i = 0; i < mesh_instance_node->get_child_count(); i++) {
 		NavigationRegion3D *navigation_region_node = Object::cast_to<NavigationRegion3D>(mesh_instance_node->get_child(i));
@@ -201,8 +202,8 @@ void MeshLibraryEditor::_import_scene_parse_node(Ref<MeshLibrary> p_library, Has
 		Ref<NavigationMesh> navigation_mesh = navigation_region_node->get_navigation_mesh();
 		if (!navigation_mesh.is_null()) {
 			Transform3D navigation_mesh_transform = navigation_region_node->get_transform();
-			p_library->set_item_navigation_mesh(item_id, navigation_mesh);
-			p_library->set_item_navigation_mesh_transform(item_id, navigation_mesh_transform);
+			p_library->get_item(item_id)->set_navigation_mesh(navigation_mesh);
+			p_library->get_item(item_id)->set_navigation_mesh_transform(navigation_mesh_transform);
 			break;
 		}
 	}
@@ -239,6 +240,97 @@ void MeshLibraryEditor::_menu_cbk(int p_option) {
 			cd_update->set_text(vformat(TTR("Update from existing scene?:\n%s"), String(mesh_library->get_meta("_editor_source_scene"))));
 			cd_update->popup_centered(Size2(500, 60));
 		} break;
+	}
+}
+
+void MeshLibraryEditor::_move_mesh_library_array_element(Object *p_undo_redo, Object *p_edited, const String &p_array_prefix, int p_from_index, int p_to_pos) {
+	EditorUndoRedoManager *undo_redo_man = Object::cast_to<EditorUndoRedoManager>(p_undo_redo);
+	ERR_FAIL_NULL(undo_redo_man);
+
+	MeshLibrary *ed_mesh_lib = Object::cast_to<MeshLibrary>(p_edited);
+	if (!ed_mesh_lib) {
+		return;
+	}
+
+	Vector<String> components = String(p_array_prefix).split("/", true, 2);
+
+	// Compute the array indices to save.
+	int begin = 0;
+	int end;
+	if (p_array_prefix == "custom_data_layer_") {
+		end = ed_mesh_lib->get_custom_data_layers_count();
+	} else {
+		ERR_FAIL_MSG("Invalid array prefix for TileSet.");
+	}
+
+	if (p_from_index < 0) {
+		// Adding new.
+		if (p_to_pos >= 0) {
+			begin = p_to_pos;
+		} else {
+			end = 0; // Nothing to save when adding at the end.
+		}
+	} else if (p_to_pos < 0) {
+		// Removing.
+		begin = p_from_index;
+	} else {
+		// Moving.
+		begin = MIN(p_from_index, p_to_pos);
+		end = MIN(MAX(p_from_index, p_to_pos) + 1, end);
+	}
+
+#define ADD_UNDO(obj, property) undo_redo_man->add_undo_property(obj, property, obj->get(property));
+
+	if (p_array_prefix == "custom_data_layer_") {
+		if (p_from_index < 0) {
+			undo_redo_man->add_undo_method(ed_mesh_lib, "remove_custom_data_layer", p_to_pos < 0 ? ed_mesh_lib->get_custom_data_layers_count() : p_to_pos);
+		}
+	}
+
+	// Save layers' properties.
+	List<PropertyInfo> properties;
+	ed_mesh_lib->get_property_list(&properties);
+	for (PropertyInfo pi : properties) {
+		if (pi.name.begins_with(p_array_prefix)) {
+			String str = pi.name.trim_prefix(p_array_prefix);
+			int to_char_index = 0;
+			while (to_char_index < str.length()) {
+				if (!is_digit(str[to_char_index])) {
+					break;
+				}
+				to_char_index++;
+			}
+			if (to_char_index > 0) {
+				int array_index = str.left(to_char_index).to_int();
+				if (array_index >= begin && array_index < end) {
+					ADD_UNDO(ed_mesh_lib, pi.name);
+				}
+			}
+		}
+	}
+
+	if (p_array_prefix == "custom_data_layer_") {
+		for (int layer_index = begin; layer_index < end; layer_index++) {
+			// Loop through all the meshes in the library
+			for (int i = 0; i < mesh_library->get_item_count(); i++) {
+				int item_id = mesh_library->get_item_list()[i];
+				Item *item = mesh_library->get_item(item_id);
+				ERR_FAIL_NULL(item);
+				ADD_UNDO(item, vformat("custom_data_%d", layer_index));
+			}
+		}
+	}
+
+#undef ADD_UNDO
+
+	if (p_array_prefix == "custom_data_layer_") {
+		if (p_from_index < 0) {
+			undo_redo_man->add_do_method(ed_mesh_lib, "add_custom_data_layer", p_to_pos);
+		} else if (p_to_pos < 0) {
+			undo_redo_man->add_do_method(ed_mesh_lib, "remove_custom_data_layer", p_from_index);
+		} else {
+			undo_redo_man->add_do_method(ed_mesh_lib, "move_custom_data_layer", p_from_index, p_to_pos);
+		}
 	}
 }
 
@@ -282,6 +374,9 @@ MeshLibraryEditor::MeshLibraryEditor() {
 	cd_update->set_ok_button_text(TTR("Apply without Transforms"));
 	cd_update->get_ok_button()->connect(SceneStringName(pressed), callable_mp(this, &MeshLibraryEditor::_menu_update_confirm).bind(false));
 	cd_update->add_button(TTR("Apply with Transforms"))->connect(SceneStringName(pressed), callable_mp(this, &MeshLibraryEditor::_menu_update_confirm).bind(true));
+
+	// changes
+	EditorNode::get_editor_data().add_move_array_element_function(SNAME("MeshLibrary"), callable_mp(this, &MeshLibraryEditor::_move_mesh_library_array_element));
 }
 
 void MeshLibraryEditorPlugin::edit(Object *p_node) {
