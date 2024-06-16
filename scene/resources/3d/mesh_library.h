@@ -54,9 +54,12 @@ private:
 	Vector<CustomDataLayer> custom_data_layers;
 	HashMap<String, int> custom_data_layers_by_name;
 
-public:
-	void _set_item_shapes(int p_item, const Array &p_shapes);
-	Array _get_item_shapes(int p_item) const;
+	/*
+	public:
+		// Why the fuck was this public it even as the underscore meaning its only used in the class (private)
+		void _set_item_shapes(int p_item, const Array &p_shapes);
+		Array _get_item_shapes(int p_item) const;
+	*/
 
 protected:
 	bool _set(const StringName &p_name, const Variant &p_value);
@@ -72,6 +75,7 @@ public:
 	bool has_item(int p_item) const;
 
 	// Not useful for gd script only for source code purpose , maybe change later then
+	// Probbly make it private then ?? i guess test later
 	Item *get_item(int p_item) const;
 
 	void clear();
@@ -125,6 +129,10 @@ protected:
 	bool _get(const StringName &p_name, Variant &r_ret) const;
 	void _get_property_list(List<PropertyInfo> *p_list) const;
 	static void _bind_methods();
+
+private:
+	void _set_shapes(const Array &p_shapes);
+	Array _get_shapes() const;
 
 public:
 	void set_mesh_library(const MeshLibrary *p_mesh_lib);
