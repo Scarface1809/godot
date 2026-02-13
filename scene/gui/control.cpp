@@ -1669,7 +1669,9 @@ void Control::_update_minimum_size() {
 
 	if (was_invalid || minsize != data.last_minimum_size) {
 		data.last_minimum_size = minsize;
+		Vector2 top_left = get_global_position();
 		_size_changed();
+		set_global_position(top_left);
 		emit_signal(SceneStringName(minimum_size_changed));
 	}
 }
